@@ -515,10 +515,33 @@ print(json.dumps({
    - `planning`/`clarifying` (rare: died mid-plan) → restart Cell 1 with the
      stored `S["spec"]`.
 
+## If an eval cell is interrupted mid-run (recovery — do NOT respawn)
+
+An interrupted eval cell (`KeyboardInterrupt: Execution interrupted`) does **not**
+kill the `agent()` jobs it spawned — they keep running in the background and
+usually FINISH, writing their result to the session artifacts (`<label>.md`,
+also retrievable with the eval `output("<job id>")` helper; check `/jobs`).
+
+1. **Recover, don't redo.** Check the job first: still running → wait/poll it;
+   finished → fetch its result (`output(...)` in a fresh eval cell, or read the
+   artifact) and continue the pipeline from that exact point. Respawning burns
+   the money already spent and orphans a live genius job.
+2. **NEVER re-route planning/consult/debug to a generic worker as a "faster
+   fallback".** The task tool's `role=` field is a display persona, NOT an agent
+   selector — a task item without `agent="planner"` runs on the generic task
+   worker (task-role model), silently swapping the genius brain for a cheap one.
+   If you must use the task tool instead of eval, pass `agent=` explicitly.
+   If the planner genuinely cannot run, STOP and tell the user — never downgrade.
+3. Repeated interrupts are an environment problem to surface to the user, not to
+   code around with a different (weaker) spawn path.
+
 ## Rules
 
 - Use the CHEAPEST agent that fits each step. The genius agents (`planner`,
   `deep-debugger`) are for planning, consults, and hard diagnosis — never grunt work.
+- **Agent selection is an invariant, not a preference:** plan/consult → `planner`,
+  hard diagnosis → `deep-debugger`, review → `deep-reviewer` — always via an
+  explicit `agent=`. A `role=` string alone NEVER substitutes for `agent=`.
 - Only parallelize (and only isolate) when `planner` says `mode=parallel` **and**
   `overlap=true`. Isolation costs worktrees + a synthesis step.
 - All dashboard writes happen at DRIVER level (between/after waves), never from
