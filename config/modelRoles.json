@@ -1,0 +1,9 @@
+{
+  "default": "anthropic/claude-opus-4-8:high, openai-codex/gpt-5.5:medium",
+  "smol": "google-antigravity/gemini-3.5-flash:medium, openai-codex/gpt-5.3-codex-spark:medium, anthropic/claude-haiku-4-5:medium, anthropic/claude-sonnet-5:medium",
+  "slow": "openai-codex/gpt-5.5:high",
+  "plan": "anthropic/claude-fable-5:high, openai-codex/gpt-5.5:xhigh, anthropic/claude-opus-4-8:max",
+  "task": "anthropic/claude-sonnet-5:high, openai-codex/gpt-5.5:medium",
+  "advisor": "openai-codex/gpt-5.5:high",
+  "designer": "zai/glm-5.2:high"
+}

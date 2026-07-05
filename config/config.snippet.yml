@@ -1,0 +1,37 @@
+# Reference snippet for ~/.omp/agent/config.yml — the keys this kit relies on.
+# Do NOT copy this file over your config wholesale; merge the keys (or run
+# ./install.sh --config, which applies them via `omp config set`).
+
+modelRoles:
+  # ┌─ CRITICAL: fallback chains MUST be COMMA-SEPARATED STRINGS, never YAML
+  # │  lists. omp's pi/<role> alias resolver calls .trim() on the raw value and
+  # │  hard-crashes on arrays (can1357/oh-my-pi#4492). A comma string is split
+  # │  into the same ordered fallback list (first resolvable model wins).
+  # └────────────────────────────────────────────────────────────────────────
+  # main agent
+  default: "anthropic/claude-opus-4-8:high, openai-codex/gpt-5.5:medium"
+  # cheap scouts (david-research, explore, librarian, sonic)
+  smol: "google-antigravity/gemini-3.5-flash:medium, openai-codex/gpt-5.3-codex-spark:medium, anthropic/claude-haiku-4-5:medium, anthropic/claude-sonnet-5:medium"
+  # reviewer tier + the review judge
+  slow: openai-codex/gpt-5.5:high
+  # GENIUS chain (planner / deep-debugger): super-smart, slow
+  plan: "anthropic/claude-fable-5:high, openai-codex/gpt-5.5:xhigh, anthropic/claude-opus-4-8:max"
+  # mechanical workers (the task agent)
+  task: "anthropic/claude-sonnet-5:high, openai-codex/gpt-5.5:medium"
+  advisor: openai-codex/gpt-5.5:high
+  designer: zai/glm-5.2:high
+
+task:
+  # Default is 2, which tool-strips deep-debugger when a task agent spawns it
+  # ad hoc (main=0 -> task=1 -> debugger=2 = AT cap -> loses its scouts).
+  # /supership routes escalation at depth 0 regardless; 3 is for ad-hoc use.
+  maxRecursionDepth: 3
+
+compaction:
+  # snapcompact needs an omp build with the frame-payload cap (PR #3866,
+  # >= v16.2.8). On older builds use 'shake' or long sessions can wedge with
+  # "Anthropic Internal server error" on resume.
+  strategy: snapcompact
+
+memory:
+  backend: local   # per-repo memory; consolidated ## Lessons get captured
