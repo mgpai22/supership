@@ -300,6 +300,39 @@ def consult(p, stuck):
         f"TRIED / ERROR:\n{stuck['tried']}\n\nQUESTION:\n{stuck['question']}",
         agent="deep-debugger", label=f"debug:{p['id']}")
 
+def salvage_yield(label_frag):
+    # A harness kill (e.g. "Soft request budget exceeded" — omp aborts a child at
+    # 1.5x task.softRequestBudget) can land AFTER the child finished its work but
+    # BEFORE its final yield's toolResult is recorded. The yield toolCall still
+    # sits in the child's transcript — recover it before declaring the piece lost.
+    import glob as _g, os as _os
+    hits = sorted(_g.glob(_os.path.expanduser(
+               f"~/.omp/agent/sessions/*/*/{label_frag}.jsonl"))
+           + _g.glob(_os.path.expanduser(
+               f"~/.omp/agent/sessions/*/*/{label_frag}-*.jsonl")),
+           key=_os.path.getmtime)
+    if not hits: return None
+    def find(o):   # tolerant: entry shapes vary across omp versions
+        if isinstance(o, dict):
+            if (o.get("toolName") == "yield" or o.get("name") == "yield"):
+                a = o.get("args") or o.get("arguments") or o.get("input")
+                if isinstance(a, str):
+                    try: a = json.loads(a)
+                    except Exception: a = None
+                if isinstance(a, dict) and "status" in a: return a
+            for v in o.values():
+                if (r := find(v)): return r
+        elif isinstance(o, list):
+            for v in o:
+                if (r := find(v)): return r
+        return None
+    for line in reversed(open(hits[-1], errors="ignore").readlines()):
+        if '"yield"' not in line: continue
+        try: y = find(json.loads(line))
+        except Exception: continue
+        if y: return y
+    return None
+
 def run_build(p):
     # Non-isolated build with the stuck-signal contract: one consult, one guided
     # retry, then surface. Returns a record; NO shared-state writes (thread-safe
@@ -317,6 +350,14 @@ def run_build(p):
         return {"id": p["id"], "ok": ok, "status": "done" if ok else "unresolved",
                 "summary": r["summary"], "why": None if ok else (r.get("stuck") or r["summary"])}
     except Exception as e:
+        # Before writing the piece off, check whether the child actually finished
+        # and only its final yield was killed in flight (budget/abort races).
+        sal = salvage_yield(f"build{p['id']}")
+        if sal and sal.get("status") == "done":
+            plog(S, "build", f"{p['id']}: salvaged done-yield after abort: {e}")
+            return {"id": p["id"], "ok": True, "status": "done",
+                    "summary": f"[salvaged after abort] {sal.get('summary','')}",
+                    "why": None}
         return {"id": p["id"], "ok": False, "status": "unresolved",
                 "summary": f"error: {e}", "why": f"error: {e}"}
 
@@ -534,6 +575,22 @@ also retrievable with the eval `output("<job id>")` helper; check `/jobs`).
    If the planner genuinely cannot run, STOP and tell the user — never downgrade.
 3. Repeated interrupts are an environment problem to surface to the user, not to
    code around with a different (weaker) spawn path.
+
+## Harness request-budget kills (`Soft request budget exceeded`)
+
+omp caps each subagent at `task.softRequestBudget` requests (default 90): at the
+budget it MAY steer the child to wrap up (only if `task.softRequestBudgetNotice`
+is true), and at **1.5×** it hard-aborts — sometimes in the exact instant the
+child is yielding `status="done"`, so the pipeline sees "error" while the work
+is complete on disk. `run_build` salvages that case automatically
+(`salvage_yield`). If a piece still lands unresolved with this error:
+1. The child's edits SURVIVE in the working tree — `git status` before assuming
+   loss; its transcript (`<session>/<label>.jsonl`) holds its findings.
+2. Re-dispatch as a **continuation** ("prior work is on disk at <files>; verify
+   and finish — do not restart"), never a from-scratch redo.
+3. For heavy pieces (debuggers routinely need 150+ requests), tell the user to
+   raise `task.softRequestBudget` and enable `task.softRequestBudgetNotice` so
+   children get the wrap-up warning instead of a silent kill.
 
 ## Rules
 
