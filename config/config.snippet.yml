@@ -26,6 +26,16 @@ task:
   # ad hoc (main=0 -> task=1 -> debugger=2 = AT cap -> loses its scouts).
   # /supership routes escalation at depth 0 regardless; 3 is for ad-hoc use.
   maxRecursionDepth: 3
+  # Per-subagent request-count governor: omp steers the child to wrap up at the
+  # budget and HARD-ABORTS it at 1.5x. The default (90 -> kill at 135) is far
+  # too low for this kit's builders/debuggers, which routinely need 150+
+  # requests — a real run had a deep-debugger killed at 135 in the exact
+  # instant it yielded status=done (the pipeline salvages that case via
+  # salvage_yield, but don't rely on it). 250 warns at 250, kills at 375.
+  softRequestBudget: 250
+  # Off by default, meaning children get NO warning — the first signal is the
+  # kill. Turn it on so agents can wrap up and yield instead of dying mid-work.
+  softRequestBudgetNotice: true
 
 compaction:
   # snapcompact needs an omp build with the frame-payload cap (PR #3866,

@@ -58,6 +58,13 @@ Then restart your omp session. `plan.html` runs are auto-gitignored per repo
 - **`modelRoles` fallback chains must be comma-separated STRINGS, never YAML
   lists** — list values crash omp's `pi/<role>` resolver
   ([oh-my-pi #4492](https://github.com/can1357/oh-my-pi/issues/4492)).
+- **`task.softRequestBudget: 250` + `task.softRequestBudgetNotice: true`**
+  (defaults: 90, notice **off**). omp hard-aborts any subagent at **1.5× the
+  budget** — with the defaults that's a silent kill at 135 requests, which this
+  kit's builders/debuggers routinely exceed (an observed deep-debugger run was
+  killed at 135 *while yielding `status=done`*, misfiling a finished piece as
+  unresolved). The pipeline salvages that specific race (`salvage_yield` in
+  Cell 2), but the config raise + wrap-up notice is what actually prevents it.
 - **`task.maxRecursionDepth: 3`** (default 2). The pipeline itself routes
   escalation at depth 0 and works at any cap; 3 un-cripples *ad-hoc* escalation
   (a task agent spawning deep-debugger outside the pipeline). Depth contract:

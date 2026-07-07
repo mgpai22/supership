@@ -54,12 +54,16 @@ if [ "$APPLY_CONFIG" = 1 ]; then
   echo "== config (via omp config set — merges into your global config.yml)"
   command -v omp >/dev/null || { echo "  ! omp not on PATH; apply config/config.snippet.yml manually"; exit 1; }
   omp config set task.maxRecursionDepth 3
+  omp config set task.softRequestBudget 250
+  omp config set task.softRequestBudgetNotice true
   omp config set modelRoles "$(cat "$REPO/config/modelRoles.json")"
-  echo "  + task.maxRecursionDepth=3, modelRoles applied"
+  echo "  + task.maxRecursionDepth=3, softRequestBudget=250 (+notice), modelRoles applied"
   echo "  (compaction/memory keys: see config/config.snippet.yml — apply if wanted)"
 else
   echo "== config: skipped (run with --config, or merge config/config.snippet.yml by hand)"
   echo "   REQUIRED for full escalation: task.maxRecursionDepth >= 3"
+  echo "   REQUIRED for heavy builds: task.softRequestBudget >= 250 + softRequestBudgetNotice=true"
+  echo "   (omp's default 90 hard-kills subagents at 135 requests, with no warning)"
   echo "   CRITICAL: modelRoles fallback chains must be comma STRINGS, not YAML lists (omp #4492)"
 fi
 
