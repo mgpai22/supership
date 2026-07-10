@@ -38,6 +38,7 @@ Generate a sample dashboard: `python3 scripts/demo.py` -> `examples/demo-plan.ht
 | `omp/agents/david-research.md` | Cheap web/docs/repo scout this helps keeps internet context out of the parent. |
 | `omp/agents/deep-debugger.md` | GENIUS root-cause diagnostician. |
 | `omp/agents/deep-reviewer.md` | Clean reviewer (no native output schema -> call-site schemas apply cleanly; model varied per lens for diversity). |
+| `omp/agents/designer.md` | UI/UX specialist (`pi/designer`). Builds/modifies/improves frontend pieces, reviews the `design` lens, and fixes frontend findings. Design-system-first, accessibility-aware. |
 | `omp/agents/review-orchestrator.md` | Legacy manual review loop (superseded by the in-pipeline loop; kept for standalone use). |
 | `omp/APPEND_SYSTEM.md` | Global system-prompt append which teaches the main agent the roster, delegation discipline, and both commands. |
 | `skills/grill/SKILL.md` | Cross-harness clarifying-interview skill (one question at a time, recommended answers, user sign-off). Works in Claude Code, Codex CLI, and omp via the shared `~/.agents/skills/` hub. |
@@ -166,14 +167,17 @@ the key falls back to the shipped default pair.
 │                                 disjoint parallel -> shared-tree wave
 │                                 overlapping parallel -> isolated worktrees
 │                                   (patch mode) -> serial synthesis
+│     ├─ frontend piece?          planner tagged agent=designer -> the DESIGNER
+│     │                           builds it (UI/UX, design-system, a11y)
 │     └─ stuck builder?           kind=design -> planner[CONSULT]
 │                                 kind=bug    -> deep-debugger
 │                                 -> one guided retry -> else surfaced unresolved
 ├─ 3 REVIEW LOOP                  diverse reviewers per lens (incl. standing
-│                                 over-engineering lens) -> judge keeps real
-│                                 findings -> refute-verifiers gate fixers ->
-│                                 fixers on shared tree -> re-review until a
-│                                 clean round (budget-gated, capped)
+│                                 over-engineering lens; + a `design` lens by the
+│                                 DESIGNER when frontend changed) -> judge keeps
+│                                 real findings -> refute-verifiers gate fixers ->
+│                                 fixers on shared tree (frontend files -> DESIGNER)
+│                                 -> re-review until a clean round (budget-gated, capped)
 └─ 4 CONSOLIDATE                  final state -> dashboard; ## Lessons +
                                   ponytail-debt harvested; omp per-repo memory
                                   carries lessons into future sessions
@@ -266,6 +270,28 @@ custom role passes through unresolved and omp *silently* spawns an undefined-mod
 session. So Cell 1 reads `omp config get modelRoles --json` itself, normalizes each
 chain to a comma-joined fallback string, and passes it via `model=` (a call-site
 `model=` overrides the planner agent's frontmatter chain).
+
+## Frontend & design (the `designer` agent)
+
+Anything user-facing routes through the **`designer`** agent (omp's UI/UX
+specialist, model `pi/designer`) — design-system-first, accessibility-aware —
+instead of the generic `task` worker, end to end:
+
+- **Build:** the planner tags any piece whose primary deliverable is UI as
+  `agent="designer"` (building frontend from scratch, modifying, or improving it);
+  the build wave dispatches it to the designer (backend/API/data stays `task`).
+- **Review:** when the change touched frontend, the review loop adds a **`design`
+  lens reviewed by the designer** (normal runs); ultra runs fold the design rubric
+  into the plato/aristotle duel instead of spawning a third reviewer.
+- **Fix:** review fixes on a frontend file are dispatched to the designer, not the
+  `task` pool — so the thing correcting UI findings has design instincts too.
+
+Detection is split by where it happens: **build** routing is the planner's semantic
+call (the piece `agent`), while **review/fix** routing is a mechanical
+`is_frontend(path)` glob (`.tsx/.jsx/.vue/.svelte/.astro/.css/.scss/.less/.html/.mdx`
++ `components|styles|ui|pages|views|layouts` dirs) — the only signal available
+post-hoc, and the same one `/superreview` uses over its diff. Uses the existing
+`modelRoles.designer` chain; no new config.
 
 ## Standalone review (`/superreview`)
 

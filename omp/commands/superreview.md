@@ -3,7 +3,9 @@
 Run the supership kit's **genius review → fix → re-verify** loop over your current
 local changes — with **no plan and no build**. Use it on ad-hoc changes you made
 by hand, or again after a `/supership` run to re-scrutinize the result.
-**Always ultra**: the `plato` + `aristotle` duel (`ultra_review_round`).
+**Always ultra**: the `plato` + `aristotle` duel (`ultra_review_round`). If the
+diff touched frontend (`is_frontend`), the duel rubric folds in the UI/UX lens and
+frontend-file fixes route to the `designer` agent (same as `/supership`).
 
 This command **reuses supership's machinery** — it does not re-author the review
 engine. The engine is `run_review_loop()` in supership's SHARED HELPERS; this
@@ -85,8 +87,17 @@ S = {"meta": {"task": ("review: " + TASK.splitlines()[0])[:160], "slug": SLUG,
      "unresolved": [], "lessons": "", "ponytail_debt": []}
 plog(S, "review", f"review start — base={BASE or 'working tree'}, ultra duel")
 
+# Frontend detection over the CHANGED set (gates the design lens; the per-file
+# is_frontend() check inside run_review_loop routes frontend fixes to the designer
+# regardless). Union of tracked diff vs BASE + untracked files; tolerate the
+# {"text": ...} tool.bash shape and fail-open to False.
+_gd = tool.bash(command=("git diff --name-only " + (BASE + " " if BASE else "") +
+                         "2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null"))
+_changed = (_gd.get("text", "") if isinstance(_gd, dict) else (_gd or "")).split()
+FRONTEND = any(is_frontend(p) for p in _changed)
+
 # THE shared engine (identical to what /supership runs), pointed at the standalone diff.
-run_review_loop(S, plan, TASK, _cfg_roles, diff_hint=review_diff_hint(BASE))
+run_review_loop(S, plan, TASK, _cfg_roles, diff_hint=review_diff_hint(BASE), frontend=FRONTEND)
 
 phase("Consolidate")
 S["meta"]["status"] = "done"

@@ -19,6 +19,8 @@ the one who grinds. Reserve your own turns for judgement and small direct work.
 - **review-orchestrator** (genius) — spawn after implementation; runs the
   review → fix → re-verify loop to convergence and returns a consolidated report.
 - **reviewer** / **deep-reviewer** — the review-orchestrator's diverse reviewers.
+- **designer** (`pi/designer`) — UI/UX specialist. supership routes frontend
+  pieces (build/modify/improve), the `design` review lens, and frontend fixes here.
 
 ## Discipline
 
