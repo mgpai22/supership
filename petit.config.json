@@ -1,0 +1,22 @@
+{
+	"title": "supership",
+	"description": "A deterministic multi-agent clarify, plan, build, review, consolidate workflow kit for oh-my-pi.",
+	"repository": "https://github.com/mgpai22/supership",
+	"branch": "main",
+	"siteUrl": "https://supership.shishirpai.com",
+	"deploy": "cloudflare",
+	"defaultScheme": "dark",
+	"schemeSwitcher": true,
+	"theme": "default",
+	"maxWidth": "lg",
+	"toc": true,
+	"credits": false,
+	"sidebar": [
+		{ "label": "Getting Started", "path": "./docs/getting-started" },
+		{ "label": "The Pipeline", "path": "./docs/pipeline" },
+		{ "label": "Ultra Mode", "path": "./docs/ultra" },
+		{ "label": "Guides", "path": "./docs/guides" },
+		{ "label": "Reference", "path": "./docs/reference" },
+		{ "label": "Changelog", "path": "./docs/changelog" }
+	]
+}

@@ -1,2 +1,6 @@
 .planning/
 __pycache__/
+
+# petit docs workspace + build output
+.petit/
+node_modules/

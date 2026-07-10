@@ -1,0 +1,46 @@
+name: Deploy docs
+
+# Every merge to main regenerates the changelog from merged PRs, rebuilds the
+# petit site, and deploys it to Cloudflare (supership.shishirpai.com).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate changelog from merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/gen-changelog.sh
+
+      - name: Build docs
+        run: npx --yes @ephem-sh/petit@latest build
+
+      - name: Re-assert the custom domain route
+        run: |
+          node -e "const fs=require('fs');const f='.petit/dist/server/wrangler.json';const c=JSON.parse(fs.readFileSync(f));c.workers_dev=true;c.routes=[{pattern:'supership.shishirpai.com',custom_domain:true}];fs.writeFileSync(f,JSON.stringify(c,null,2));console.log('patched',f)"
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: .petit
+          command: deploy
