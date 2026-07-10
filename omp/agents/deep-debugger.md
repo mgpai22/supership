@@ -3,7 +3,7 @@ name: deep-debugger
 description: Super-smart, slow DIAGNOSTICIAN. Spawn when a worker is stuck on a hard bug or failure it cannot figure out. It investigates read-only with the full context you give it, finds the ROOT CAUSE, and returns the exact issue + fix guidance. It does NOT implement — it diagnoses.
 model:
   - anthropic/claude-fable-5:high      # GENIUS chain
-  - openai-codex/gpt-5.5:xhigh
+  - openai-codex/gpt-5.6-sol:xhigh
   - anthropic/claude-opus-4-8:max
 thinkingLevel: high
 spawns:

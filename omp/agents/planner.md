@@ -3,7 +3,7 @@ name: planner
 description: Super-smart, slow ARCHITECT. Use to plan non-trivial multi-step work BEFORE implementing. It investigates only via cheap subagents (never greps/browses itself), decides parallel-vs-sequential honestly, and returns a concrete execution plan. Does NOT implement. Overkill for trivial/single-file tasks.
 model:
   - anthropic/claude-fable-5:high      # GENIUS chain
-  - openai-codex/gpt-5.5:xhigh
+  - openai-codex/gpt-5.6-sol:xhigh
   - anthropic/claude-opus-4-8:max
 thinkingLevel: high
 spawns:
