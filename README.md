@@ -17,6 +17,8 @@ every run human-readable, durable, and resumable.
 /ultraship [topo] <task>    interactive, but with TWO genius planners (plato + aristotle)
                             debating the plan first — topo = crossreview|duel|debate
 /ultrashipit [topo] <task>  autonomous dual-genius: same two-planner front end, no gate
+/superreview [--base <ref>] [intent]   standalone: genius review->fix loop over your
+                            CURRENT local changes (no plan/build) — always ultra
 ```
 
 Generate a sample dashboard: `python3 scripts/demo.py` -> `examples/demo-plan.html`.
@@ -29,6 +31,7 @@ Generate a sample dashboard: `python3 scripts/demo.py` -> `examples/demo-plan.ht
 | `omp/commands/shipit.md` | Thin auto-mode wrapper (it executes supership.md with `MODE="auto"`). |
 | `omp/commands/ultraship.md` | Thin ultra wrapper: supership.md with `ULTRA=True` (two genius planners debate the plan) + a topology word. Interactive. |
 | `omp/commands/ultrashipit.md` | Autonomous ultra wrapper: `ULTRA=True` + `MODE="auto"` (dual-genius plan, no interview/gate). |
+| `omp/commands/superreview.md` | Standalone genius **review→fix** loop over local changes (no plan/build). Reuses supership's shared `run_review_loop()` engine; always ultra. |
 | `omp/templates/supership-plan.html` | The dashboard template with dark, dependency-free, `file://`-safe, XSS-safe (textContent-only render). |
 | `omp/agents/planner.md` | GENIUS architect. Three modes: CLARIFY (dependency-ordered question tree, each with a recommended answer), PLAN (structured plan), CONSULT (adjudicate a stuck implementer's design question). |
 | `omp/agents/task.md` | Mechanical worker. Offloads research to scouts; returns a `stuck` signal instead of thrashing. |
@@ -263,6 +266,38 @@ custom role passes through unresolved and omp *silently* spawns an undefined-mod
 session. So Cell 1 reads `omp config get modelRoles --json` itself, normalizes each
 chain to a comma-joined fallback string, and passes it via `model=` (a call-site
 `model=` overrides the planner agent's frontmatter chain).
+
+## Standalone review (`/superreview`)
+
+`/supership` reviews as the last stage of a full plan→build→review run.
+`/superreview` peels that review stage off into a **standalone command** you point
+at *any* local changes — a diff you wrote by hand, or the output of a previous
+supership run you want a second, harder pass on. It runs the **exact same engine**
+(the shared `run_review_loop()`), just seeded with a review-only state and no
+plan/build. **Always ultra** — the `plato`+`aristotle` genius duel.
+
+```
+/superreview [--base <ref>] [--slug <slug>] [free-text intent…]
+```
+
+- **Diff target** (auto-detected): uncommitted changes if the working tree is
+  dirty; otherwise the current branch vs its `git merge-base` with the default
+  branch; `--base <ref>` overrides. Re-review always diffs the same fixed base, so
+  fixes accumulate across rounds.
+- **Intent**: the free-text argument is what the change is *meant* to do (plus any
+  scope/non-goals); omit it and reviewers infer intent from the diff + recent
+  commits. There's no plan to anchor scope, so reviewers lean toward *defects in
+  what changed*.
+- **Always ultra**: seats are resolved **live from config at review start** (no
+  plan to freeze them) and frozen into this run's state; loud-fail if `plato`/
+  `aristotle` are unset. No normal-tier/lite mode.
+- **Same UX**: writes a `.planning/review-<MMDD-HHMM>/plan.html` dashboard,
+  resumable via `/superreview resume`, and it **fixes** on the shared tree (the
+  full review→fix→re-verify loop, not just a report). No clarify, no approval gate.
+
+Because it shares `run_review_loop()` with the pipeline, every improvement to the
+review engine (the verify gate, the ultra duel) lands in both at once. It's
+**local-only** — for GitHub PR review use the built-in `/code-review` / `/review`.
 
 ## License
 
