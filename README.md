@@ -97,10 +97,13 @@ installing ponytail globally reinforces the same discipline in ordinary
 
 omp's `modelRoles` chains are fallback-only (first resolvable model always
 wins — no native rotation, and provider in-flight caps queue rather than
-spill over). So Cell 2 routes explicitly: `TASK_MODEL_POOL` round-robins
-plain `task` builders and fixers across models/subscriptions via
-`agent(model=...)`, deterministically by piece order (resume-safe). Weight by
-repeating an entry; set `[]` to disable. Genius agents never pool.
+spill over). So Cell 2 routes explicitly: a **pool** (`modelRoles.taskpool`)
+round-robins plain `task` builders, fixers, and review verifiers across
+models/subscriptions via `agent(model=...)`, deterministically by piece order
+(resume-safe). The pool is **configured, not a cell constant** — set it in
+`modelRoles.taskpool` (entries are single model patterns; weight by repeating
+an entry; `taskpool: []` **disables** pooling; omitting the key falls back to
+the shipped default pair). Genius agents never pool.
 
 Routing is **subscription-aware**, two layers:
 - **Proactive** — before each spawn, `pool_healthy()` reads omp's own durable
@@ -125,6 +128,27 @@ account** and only marks a provider unhealthy when every account is
 drained or credential-blocked — one healthy Max account keeps the whole
 anthropic pool entry usable.
 
+## Review verification (the blind-judge gate)
+
+The review judge rules on each finding's **text**, never the code — so a
+plausible-but-wrong finding (a real defect that isn't, a misread of the diff)
+sails through and a fixer "corrects" working code. To close that gap, every
+judge-kept finding passes through a **refute-verifier** before any fixer runs:
+one `task` agent per finding tries to *disprove* it against the actual code
+(reading the files, running cheap checks), and the finding is dropped unless it
+comes back `confirmed=true` with concrete evidence (`file:line` + why it's a
+real defect). Only confirmed findings reach the fixers and `S["findings"]`; a
+round where everything is refuted counts as clean and the loop exits. The gate
+is **fail-open** — a verifier that errors keeps its finding, so infra noise
+never silently drops a real bug — and `VERIFY_FINDINGS` (in Cell 2) is the
+kill-switch to disable it. Each round records `found` / `kept` (judge) /
+`confirmed` (post-verify) in the dashboard.
+
+Reviewer models are a **diversity set** you configure via `modelRoles.reviewers`
+(entries alternate across the lenses so different lenses get different eyes; not
+a fallback chain, though an entry may itself be a comma-joined chain). Omitting
+the key falls back to the shipped default pair.
+
 ## How the pipeline works
 
 ```
@@ -144,8 +168,9 @@ anthropic pool entry usable.
 │                                 -> one guided retry -> else surfaced unresolved
 ├─ 3 REVIEW LOOP                  diverse reviewers per lens (incl. standing
 │                                 over-engineering lens) -> judge keeps real
-│                                 findings -> fixers on shared tree -> re-review
-│                                 until a clean round (budget-gated, capped)
+│                                 findings -> refute-verifiers gate fixers ->
+│                                 fixers on shared tree -> re-review until a
+│                                 clean round (budget-gated, capped)
 └─ 4 CONSOLIDATE                  final state -> dashboard; ## Lessons +
                                   ponytail-debt harvested; omp per-repo memory
                                   carries lessons into future sessions
