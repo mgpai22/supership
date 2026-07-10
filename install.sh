@@ -147,7 +147,7 @@ else
   echo "   REQUIRED for full escalation: task.maxRecursionDepth >= 3"
   echo "   REQUIRED for heavy builds: task.softRequestBudget >= 250 + softRequestBudgetNotice=true"
   echo "   (omp's default 90 hard-kills subagents at 135 requests, with no warning)"
-  echo "   CRITICAL: modelRoles fallback chains must be comma STRINGS, not YAML lists (omp #4492)"
+  echo "   NOTE: modelRoles ships as YAML lists — needs omp >= 16.3.7 (#4492); flatten to comma strings on older builds"
 fi
 
 echo
