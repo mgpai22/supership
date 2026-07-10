@@ -43,6 +43,11 @@ with real control flow, authored by YOU at depth 0, never a nested orchestrator)
   **approve** before anything is built.
 - **`/shipit <task>`** — autonomous: no interview, no gate; same pipeline
   end-to-end with the dashboard as a live window.
+- **`/ultraship` / `/ultrashipit` `[topo] <task>`** — same pipeline, but two genius
+  seats (plato + aristotle) debate the plan first and review genius-tier.
+- **`/superreview [--base <ref>] [intent]`** — the review→fix loop **standalone**,
+  over your current local changes (no plan/build); always ultra. Reuses the same
+  `run_review_loop()` engine.
 
 Both persist canonical state to **`.planning/<slug>/plan.html`** (embedded JSON +
 self-rendering page; auto-gitignored, deliberately committable). Updates are
