@@ -24,6 +24,8 @@ git clone https://github.com/mgpai22/supership.git && cd supership
 
 Then restart your omp session. Use `./install.sh --link` to keep this repo as the live source, or `./install.sh` to copy without applying config.
 
+`install.sh` also installs the [`ax`](https://ax.yusuke.run) web-fetch/extract CLI (auto-installed into `~/.local/bin`, pinned to v0.1.5 and checksum-verified) plus its matching skill. It skips if `ax` is already on your PATH.
+
 ### Install with an agent
 
 Paste this into your coding agent and it does the setup for you.
@@ -31,7 +33,8 @@ Paste this into your coding agent and it does the setup for you.
 ```text
 Install the supership kit for oh-my-pi from https://github.com/mgpai22/supership.
 Clone the repo, run `./install.sh --config` (this copies the commands, agents, and
-grill skill into ~/.omp/agent and applies the modelRoles + task config), then tell
+grill and ax skills into ~/.omp/agent, installs the pinned ax CLI, and applies the
+modelRoles + task config), then tell
 me to restart my omp session. Reference: https://supership.shishirpai.com
 ```
 

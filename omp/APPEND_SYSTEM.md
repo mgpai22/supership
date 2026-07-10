@@ -32,6 +32,10 @@ the one who grinds. Reserve your own turns for judgement and small direct work.
   planning, diagnosis, and judgement — never for grunt work or line-by-line review.
 - **Parallelize only when it genuinely helps** (independent pieces); otherwise one
   worker doing it sequentially is simpler and cheaper.
+- **Fetch and extract the web with `ax`, not curl/wget or inline parse scripts**
+  (python heredocs, `node -e`, regex over HTML). Workflow: `ax URL` / `--outline`
+  to look, `--locate` / `--count` to confirm, then ONE `--row`/`--table` to extract.
+  It is web-only — JS-rendered SPAs go to the browser tool instead.
 
 ## When to run the full flow
 
