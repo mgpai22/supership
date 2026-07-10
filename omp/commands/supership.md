@@ -196,8 +196,8 @@ PLAN_SCHEMA = {
                 "properties": {
                     "id": {"type": "string", "description": "Stable short id, e.g. p1"},
                     "description": {"type": "string", "description": "Complete standalone instruction for this piece's implementer"},
-                    "agent": {"type": "string", "enum": ["task", "deep-debugger"],
-                        "description": "task for mechanical work; deep-debugger only if the piece needs hard diagnosis first"}}}},
+                    "agent": {"type": "string", "enum": ["task", "deep-debugger", "designer"],
+                        "description": "task for mechanical work; designer when the piece's PRIMARY deliverable is user-facing UI (components, styling, layout, UX, client-side interactivity — building new frontend, modifying, or improving it); deep-debugger only if the piece needs hard diagnosis first"}}}},
         "review_lenses": {"type": "array", "items": {"type": "string"},
             "description": "Review focuses to fan out, e.g. correctness, security, edge-cases, design"},
         "notes": {"type": "string", "description": "Sequencing constraints + synthesis/verify guidance"},
@@ -290,6 +290,17 @@ UREVIEW_SCHEMA = {
 # reaches for agent / parallel / completion / budget / pool_model / pool_alt from
 # the CALLING cell's globals at call time, so it is defined here but only runs
 # inside a cell body (the cell must have set up the pool helpers first).
+FRONTEND_EXT = (".tsx", ".jsx", ".vue", ".svelte", ".astro", ".css", ".scss",
+                ".sass", ".less", ".html", ".htm", ".mdx")
+FRONTEND_DIR = ("components", "component", "styles", "style", "ui", "pages",
+                "views", "layouts")
+def is_frontend(path):
+    # Mechanical frontend detection for review/fix routing (BUILD routing is the
+    # planner's call via the piece `agent`). Approximate + tunable: a known UI
+    # extension or a UI-ish path segment. A `.ts` full of DOM logic won't match — ok.
+    p = (path or "").lower()
+    return p.endswith(FRONTEND_EXT) or any(seg in FRONTEND_DIR for seg in p.split("/"))
+
 def review_diff_hint(base=None):
     # What reviewers are told to inspect. Default = the uncommitted working tree
     # (byte-for-byte the pre-refactor wording, so supership is unchanged);
@@ -300,7 +311,7 @@ def review_diff_hint(base=None):
     return ("the current UNCOMMITTED changes (inspect via `git diff` and read "
             "the touched files)")
 
-def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
+def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None, frontend=False,
                     max_rounds=3, verify_findings=True, budget_reserve=60_000):
     # Drives S["meta"]["status"]="reviewing" -> rounds -> clean/cap. Mutates S
     # (review_rounds, findings) and the working tree (fixers); the CALLER does the
@@ -315,6 +326,8 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
     lenses = plan.get("review_lenses") or ["correctness", "security", "edge-cases", "design"]
     if "over-engineering" not in lenses:      # standing ponytail lens
         lenses = lenses + ["over-engineering"]
+    if frontend and "design" not in lenses:   # designer reviews the UI when frontend changed
+        lenses = lenses + ["design"]
 
     # Standing over-engineering rubric — shared by the per-lens deep-reviewer
     # (normal path) and the holistic genius review (ultra path).
@@ -326,6 +339,13 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
         "fix is a smaller diff, and explanation longer than the code. For each, give "
         "the simpler alternative. Do NOT flag validation, error handling, security, "
         "accessibility, or explicitly-requested work — those are never 'bloat'.")
+    # UI/UX rubric for the design lens (normal path) + folded into the ultra rubric.
+    DESIGN_RUBRIC = (
+        "Apply a UI/UX lens: unclear or missing states + feedback, weak visual "
+        "hierarchy, inconsistent spacing/typography/color vs the design system, "
+        "accessibility gaps (contrast, focus states, semantic markup, keyboard + "
+        "screen-reader), and responsive/layout breakage. Prefer existing design "
+        "tokens + shared primitives over new one-offs.")
 
     # ULTRA seats: for a supership run these are FROZEN into state at plan time;
     # for /superreview they are resolved live and frozen at review start. None ->
@@ -339,11 +359,25 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
         # SET (entries alternate across lenses), NOT a fallback chain; empty = misconfig.
         review_models = list(cfg_roles.get("reviewers")
                              or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
-        return [{"agent": "deep-reviewer", "model": review_models[i % len(review_models)], "lens": lens}
-                for i, lens in enumerate(lenses)]
+        # The `design` lens goes to the DESIGNER agent (pi/designer), not deep-reviewer;
+        # it doesn't consume a reviewer-model slot (keeps the diversity alternation stable).
+        specs, j = [], 0
+        for lens in lenses:
+            if lens == "design":
+                specs.append({"agent": "designer", "model": None, "lens": "design"})
+            else:
+                specs.append({"agent": "deep-reviewer",
+                              "model": review_models[j % len(review_models)], "lens": lens})
+                j += 1
+        return specs
 
     def run_reviewer(s):
-        rubric = "" if s["lens"] != "over-engineering" else " " + PONY_RUBRIC
+        if s["lens"] == "over-engineering":
+            rubric = " " + PONY_RUBRIC
+        elif s["lens"] == "design":
+            rubric = " " + DESIGN_RUBRIC
+        else:
+            rubric = ""
         try:
             r = agent(
                 "Review " + diff_hint + " that implement:\n" + TASK +
@@ -368,7 +402,8 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
         plato, aristotle = UR["plato"], UR["aristotle"]
         rev = ("Review " + diff_hint + " that implement:\n" + TASK +
                "\n\nCover ALL these lenses in this one review: " + ", ".join(lenses) +
-               ". Report ONLY real, patch-anchored defects. " + PONY_RUBRIC)
+               ". Report ONLY real, patch-anchored defects. " + PONY_RUBRIC +
+               ((" " + DESIGN_RUBRIC) if "design" in lenses else ""))
         bp, ba = parallel([
             lambda: agent(rev, agent="deep-reviewer", model=plato,
                           label=f"ureview:plato:{round_n}", schema=FINDINGS_SCHEMA),
@@ -488,6 +523,14 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
                 f"- {x['title']} (L{x['line_start']}-{x['line_end']}): {x['body']}" for x in items)
             prompt = (f"Fix these confirmed review findings in {path}. Edit the shared "
                       f"working tree in place; do NOT create new files.\n{body}")
+            if is_frontend(path):
+                # Frontend file -> the DESIGNER fixes it (design instincts on the edit).
+                # No pool (explicit agent). Fall back to the task pool only if it errors.
+                try:
+                    agent(prompt, agent="designer", label=f"fix:{path}")
+                    return
+                except Exception as e:
+                    log(f"designer fix failed for {path}, falling back to task pool: {e}")
             mdl = pool_model(path)
             try:
                 agent(prompt, agent="task", model=mdl, label=f"fix:{path}")
@@ -516,7 +559,13 @@ PLAN_PROMPT = (
     "your cheap subagents (explore/david-research/librarian) — do not grep or "
     "browse yourself. Decide sequential-vs-parallel honestly; most work is "
     "sequential (one implementer). If parallel, set overlap=true only when the "
-    "pieces may edit the SAME files.\n\nTASK:\n" + TASK)
+    "pieces may edit the SAME files. Set each piece's `agent`: use `designer` for "
+    "any piece whose PRIMARY deliverable is user-facing UI — building frontend from "
+    "scratch, modifying it, or improving it (components, styling, layout, UX flows, "
+    "client-side interactivity); keep `task` for backend/API/data/build-config; "
+    "prefer SPLITTING a half-UI/half-backend piece into a `designer` piece + a "
+    "`task` piece when both are substantial, else tag by the dominant surface."
+    "\n\nTASK:\n" + TASK)
 
 PLATO = ARISTOTLE = None
 if not ULTRA:
@@ -677,6 +726,14 @@ fan-out and the judge are replaced by the genius duel of `ultra_review_round()`,
 whose cross-red-team subsumes the refute-verifier — while the shared back half
 (numeric gate, fixers, round loop, exit conditions) is the identical code, so
 normal runs are unaffected.
+
+**Frontend → the `designer` agent.** Build routing is the planner's call: it tags
+any UI piece `agent="designer"` (see `PLAN_SCHEMA`), which the build wave dispatches
+to the designer (`model=None` → `pi/designer`; no pooling). Review/fix routing is
+mechanical via `is_frontend(path)`: when frontend changed, `run_review_loop` adds a
+`design` lens reviewed by the designer (normal) or folds the design rubric into the
+duel (ultra), and any frontend file's fixes go to the designer instead of the task
+pool. `/superreview` uses the same `is_frontend` signal over its diff.
 
 ```py
 S = load_state()
@@ -966,7 +1023,8 @@ else:
 # REVIEW -> FIX -> REVERIFY  (shared engine — see run_review_loop in HELPERS;
 # /superreview drives the SAME function over a standalone diff)
 # ============================================================================
-run_review_loop(S, plan, TASK, _cfg_roles)
+run_review_loop(S, plan, TASK, _cfg_roles,
+                frontend=any(p.get("agent") == "designer" for p in plan["pieces"]))
 
 # ============================================================================
 # CONSOLIDATE
