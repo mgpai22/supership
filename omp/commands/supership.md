@@ -114,7 +114,10 @@ import json, os, re, time
 # Updates are CODE-DRIVEN from this pipeline (never trusted to agent memory).
 PLAN_DIR = os.path.join(".planning", SLUG)
 PLAN_PATH = os.path.join(PLAN_DIR, "plan.html")
-TEMPLATE_PATH = os.path.expanduser("~/.omp/agent/templates/supership-plan.html")
+# Repo-vendored template wins over the global install (matches omp's own
+# project-over-global discovery); _FALLBACK renders if neither exists.
+TEMPLATE_PATHS = (os.path.join(".omp", "templates", "supership-plan.html"),
+                  os.path.expanduser("~/.omp/agent/templates/supership-plan.html"))
 _FALLBACK = ('<!doctype html><meta charset="utf-8"><title>supership</title>'
              '<pre id="o"></pre>'
              '<script type="application/json" id="plan-data">{{DATA}}</script>'
@@ -124,10 +127,12 @@ _FALLBACK = ('<!doctype html><meta charset="utf-8"><title>supership</title>'
              "setTimeout(function(){location.reload()},5000);</script>")
 
 def _template():
-    try:
-        return open(TEMPLATE_PATH, encoding="utf-8").read()
-    except OSError:
-        return _FALLBACK
+    for p in TEMPLATE_PATHS:
+        try:
+            return open(p, encoding="utf-8").read()
+        except OSError:
+            continue
+    return _FALLBACK
 
 def save_state(S):
     S["meta"]["updated"] = time.strftime("%Y-%m-%d %H:%M:%S")

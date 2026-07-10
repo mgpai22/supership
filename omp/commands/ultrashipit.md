@@ -1,6 +1,6 @@
 # /ultrashipit — supership with TWO genius planners, fully autonomous (ultra)
 
-Run the **exact** pipeline defined in `~/.omp/agent/commands/supership.md` with
+Run the **exact** pipeline defined in `.omp/commands/supership.md` (this repo; fall back to `~/.omp/agent/commands/supership.md` if absent) with
 the ultra dual-genius planner (`plato` = chief architect / consolidator,
 `aristotle` = challenger), in **`MODE = "auto"`**. Read that file now and follow
 it with these deltas:

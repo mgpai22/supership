@@ -10,7 +10,8 @@ frontend-file fixes route to the `designer` agent (same as `/supership`).
 This command **reuses supership's machinery** — it does not re-author the review
 engine. The engine is `run_review_loop()` in supership's SHARED HELPERS; this
 command just seeds a review-only state and calls it. Read
-`~/.omp/agent/commands/supership.md` for the HELPERS + POOL blocks referenced below.
+`.omp/commands/supership.md` (this repo; fall back to
+`~/.omp/agent/commands/supership.md` if absent) for the HELPERS + POOL blocks referenced below.
 
 ## Arguments
 

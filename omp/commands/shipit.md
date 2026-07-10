@@ -1,6 +1,6 @@
 # /shipit — supership, fully autonomous (no interview, no approval gate)
 
-Run the **exact** pipeline defined in `~/.omp/agent/commands/supership.md`, but
+Run the **exact** pipeline defined in `.omp/commands/supership.md` (this repo; fall back to `~/.omp/agent/commands/supership.md` if absent), but
 in **`MODE = "auto"`**. Read that file now and follow it with these deltas:
 
 - **Skip Phase 0 (clarify) entirely.** Do not interview the user. `TASK` is the
