@@ -283,6 +283,224 @@ UREVIEW_SCHEMA = {
         "verdicts": JUDGE_SCHEMA["properties"]["verdicts"],
     },
 }
+
+# ---- REVIEW ENGINE (shared by supership Cell 2 AND /superreview) --------------
+# ONE review -> fix -> re-verify loop, factored out so the pipeline and the
+# standalone review command drive the IDENTICAL engine (fix it once). Lazy: it
+# reaches for agent / parallel / completion / budget / pool_model / pool_alt from
+# the CALLING cell's globals at call time, so it is defined here but only runs
+# inside a cell body (the cell must have set up the pool helpers first).
+def review_diff_hint(base=None):
+    # What reviewers are told to inspect. Default = the uncommitted working tree
+    # (byte-for-byte the pre-refactor wording, so supership is unchanged);
+    # /superreview passes a base ref to review a committed range instead.
+    if base:
+        return (f"the changes since `{base}` (inspect via `git diff {base}...HEAD` "
+                "plus any uncommitted edits, and read the touched files)")
+    return ("the current UNCOMMITTED changes (inspect via `git diff` and read "
+            "the touched files)")
+
+def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None,
+                    max_rounds=3, verify_findings=True, budget_reserve=60_000):
+    # Drives S["meta"]["status"]="reviewing" -> rounds -> clean/cap. Mutates S
+    # (review_rounds, findings) and the working tree (fixers); the CALLER does the
+    # consolidate. `cfg_roles` supplies the reviewer diversity set (read lazily if
+    # omitted). Ultra vs normal is chosen by S["meta"].get("ultra").
+    if cfg_roles is None:
+        cfg_roles = read_model_roles()
+    if diff_hint is None:
+        diff_hint = review_diff_hint()
+    S["meta"]["status"] = "reviewing"
+    save_state(S)
+    lenses = plan.get("review_lenses") or ["correctness", "security", "edge-cases", "design"]
+    if "over-engineering" not in lenses:      # standing ponytail lens
+        lenses = lenses + ["over-engineering"]
+
+    # Standing over-engineering rubric — shared by the per-lens deep-reviewer
+    # (normal path) and the holistic genius review (ultra path).
+    PONY_RUBRIC = (
+        "Apply the ponytail (lazy-senior-dev) rubric: flag unnecessary abstractions "
+        "(interface/factory/config with one use), scaffolding 'for later', a NEW "
+        "dependency where stdlib/native/a few lines suffice, re-implementation of "
+        "something already in the codebase, a symptom-patch where a shared root-cause "
+        "fix is a smaller diff, and explanation longer than the code. For each, give "
+        "the simpler alternative. Do NOT flag validation, error handling, security, "
+        "accessibility, or explicitly-requested work — those are never 'bloat'.")
+
+    # ULTRA seats: for a supership run these are FROZEN into state at plan time;
+    # for /superreview they are resolved live and frozen at review start. None ->
+    # the normal deep-reviewer fan-out path.
+    UR = S["meta"].get("ultra")
+
+    def review_specs():
+        # DIVERSE MODELS on ONE clean reviewer: deep-reviewer has no native output
+        # schema, so the FINDINGS_SCHEMA call-site override applies cleanly (avoids
+        # oh-my-pi #3926 with the bundled `reviewer`). `reviewers` is a DIVERSITY
+        # SET (entries alternate across lenses), NOT a fallback chain; empty = misconfig.
+        review_models = list(cfg_roles.get("reviewers")
+                             or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
+        return [{"agent": "deep-reviewer", "model": review_models[i % len(review_models)], "lens": lens}
+                for i, lens in enumerate(lenses)]
+
+    def run_reviewer(s):
+        rubric = "" if s["lens"] != "over-engineering" else " " + PONY_RUBRIC
+        try:
+            r = agent(
+                "Review " + diff_hint + " that implement:\n" + TASK +
+                f"\n\nFocus lens: {s['lens']}. Report ONLY real, patch-anchored defects."
+                + rubric,
+                agent=s["agent"], model=s["model"], label=f"review:{s['lens']}",
+                schema=FINDINGS_SCHEMA)
+            return r.get("findings", [])
+        except Exception as e:             # schema-violation / unknown-agent -> skip lens
+            log(f"reviewer {s['agent']}/{s['lens']} failed: {e}")
+            return []
+
+    def ultra_review_round(round_n):
+        # ULTRA path: duel-shaped genius review. Two seats read the diff BLIND, each
+        # red-teams the RIVAL's findings, then plato (sole owner) emits the kept set
+        # + per-lens verdicts. HOLISTIC (all lenses in one pass; a per-lens genius
+        # fan-out would blow up cost). The cross-red-team SUBSUMES the refute-verifier
+        # (the rival already tried to knock each finding down), so the synthesis
+        # output IS the confirmed set; no task-tier verify spawns. deep-reviewer
+        # persona (clean call-site schema), genius MODEL. Returns (union_raw, kept,
+        # verdicts): union_raw is only for the `found` count + clean check.
+        plato, aristotle = UR["plato"], UR["aristotle"]
+        rev = ("Review " + diff_hint + " that implement:\n" + TASK +
+               "\n\nCover ALL these lenses in this one review: " + ", ".join(lenses) +
+               ". Report ONLY real, patch-anchored defects. " + PONY_RUBRIC)
+        bp, ba = parallel([
+            lambda: agent(rev, agent="deep-reviewer", model=plato,
+                          label=f"ureview:plato:{round_n}", schema=FINDINGS_SCHEMA),
+            lambda: agent(rev, agent="deep-reviewer", model=aristotle,
+                          label=f"ureview:aristotle:{round_n}", schema=FINDINGS_SCHEMA)])
+        fp, fa = bp.get("findings", []), ba.get("findings", [])
+        union = fp + fa
+        for i, f in enumerate(union):      # stable ids so the critiques can cite them
+            f["id"] = f"r{round_n}-{i}"
+        if not union:
+            return [], [], []              # clean -> shared code treats like no findings
+        def _rteam(rival):
+            return ("Red-team these code-review findings raised by the RIVAL reviewer "
+                    "against the ACTUAL code — adversarial, no praise. For each, say "
+                    "whether it is a real, patch-anchored defect or a false positive / "
+                    "nit / dupe, with concrete evidence (file:line + why).\n\nTASK:\n" +
+                    TASK + "\n\nRIVAL FINDINGS:\n" + json.dumps(rival))
+        cp, ca = parallel([
+            # plato red-teams aristotle's findings, and vice versa
+            lambda: agent(_rteam(fa), agent="deep-reviewer", model=plato,
+                          label=f"ucritique:plato:{round_n}"),
+            lambda: agent(_rteam(fp), agent="deep-reviewer", model=aristotle,
+                          label=f"ucritique:aristotle:{round_n}")])
+        syn = agent(
+            "You are the SOLE OWNER of this review. Given both blind reviews and each "
+            "reviewer's red-team of the other, emit the FINAL set of real, patch-anchored "
+            "defects worth fixing: keep only findings that survived the cross-red-team "
+            "with evidence; drop nits, dupes, and false positives; merge duplicates. Also "
+            "return one verdict per lens (clean | issues_remain).\n\nTASK:\n" + TASK +
+            "\n\nPLATO FINDINGS:\n" + json.dumps(fp) +
+            "\n\nARISTOTLE FINDINGS:\n" + json.dumps(fa) +
+            "\n\nPLATO RED-TEAM (of aristotle):\n" + cp +
+            "\n\nARISTOTLE RED-TEAM (of plato):\n" + ca,
+            agent="deep-reviewer", model=plato, label=f"usynth:{round_n}",
+            schema=UREVIEW_SCHEMA)
+        kept = syn.get("findings", [])
+        for i, f in enumerate(kept):       # fresh ids on the authoritative kept set
+            f["id"] = f"r{round_n}-{i}"
+        return union, kept, syn.get("verdicts", [])
+
+    round_n = len(S["review_rounds"])      # resume-safe: continue the count
+    while True:
+        round_n += 1
+        if budget.total and budget.remaining() < budget_reserve:   # gate on total FIRST
+            plog(S, "review", f"budget low ({budget.remaining()}); stopping at round {round_n}")
+            break
+        phase(f"Review round {round_n}" + (" [ultra]" if UR else ""))
+        # FRONT HALF branches on the run kind; everything below "keep_candidates" is
+        # SHARED so normal /supership runs execute the identical back half.
+        if UR:
+            # Ultra: genius duel -> synthesis already emits the confirmed keep set
+            # (cross-red-team subsumed the refute-verifier). verdicts from synthesis.
+            findings, keep_candidates, verdicts = ultra_review_round(round_n)
+        else:
+            groups = parallel([lambda s=s: run_reviewer(s) for s in review_specs()])
+            findings = [f for g in groups for f in g]
+            for i, f in enumerate(findings):
+                f["id"] = f"r{round_n}-{i}"
+            if findings:
+                judged = completion(
+                    "You are the review judge. For each finding, keep=true ONLY if it is a real, "
+                    "in-scope defect worth fixing (drop nits, dupes, false positives). Then give a "
+                    "per-lens verdict.\nFINDINGS:\n" + json.dumps(findings),
+                    model="slow", schema=JUDGE_SCHEMA)
+                keep_ids = {d["id"] for d in judged["decisions"] if d["keep"]}
+                keep_candidates = [f for f in findings if f["id"] in keep_ids]
+                verdicts = judged["verdicts"]
+            else:
+                keep_candidates, verdicts = [], []
+        if not findings:
+            S["review_rounds"].append({"round": round_n, "found": 0, "kept": 0, "verdicts": []})
+            plog(S, "review", f"round {round_n}: clean — no findings")
+            break
+        # Shared numeric gate (both paths): only actionable, high-confidence defects.
+        real = [f for f in keep_candidates if f["priority"] <= 1 and f["confidence"] >= 0.6]
+        kept_n = len(real)   # kept AFTER the numeric gate, BEFORE the refute-verify gate
+        # VERIFY (NORMAL path only — blind-judge fix): the completion judge rules on the
+        # finding TEXT, never the code, so a plausible-but-wrong finding survives. Gate
+        # the fixers behind a per-finding verifier that tries to REFUTE it against the
+        # real code; only confirmed findings reach fixers / S["findings"]. Fail-OPEN
+        # (infra noise must never silently drop a judge-kept finding). Zero-kept rounds
+        # spawn none. Ultra rounds SKIP this: the genius cross-red-team already refuted-
+        # or-confirmed each finding, so kept == confirmed with no task-tier verify.
+        if not UR and verify_findings and real:
+            def verify_finding(f):
+                try:
+                    v = agent("Try to REFUTE this code-review finding against the actual code. "
+                              "Read the files; run cheap checks if useful. confirmed=true ONLY "
+                              "with concrete evidence (file:line + why it is really a defect). "
+                              "If you cannot confirm with evidence, it is refuted (confirmed=false)."
+                              "\n\nTASK CONTEXT:\n" + TASK + "\n\nFINDING:\n" + json.dumps(f),
+                              agent="task", model=pool_model(f["id"]), label=f"verify:{f['id']}",
+                              schema=VERIFY_SCHEMA)
+                    return {**f, "verified": v["confirmed"], "evidence": v["evidence"]}
+                except Exception as e:
+                    # fail-OPEN: infra noise must never silently drop a judge-kept finding
+                    return {**f, "verified": True, "evidence": f"verifier error (kept): {e}"}
+            real = [f for f in parallel([lambda f=f: verify_finding(f) for f in real]) if f["verified"]]
+        S["review_rounds"].append({"round": round_n, "found": len(findings),
+                                   "kept": kept_n, "confirmed": len(real),
+                                   "verdicts": verdicts})
+        S["findings"].extend(real)
+        plog(S, "review", f"round {round_n}: {len(findings)} found, {kept_n} kept, {len(real)} confirmed")
+        if not real:
+            break
+        if round_n >= max_rounds:
+            plog(S, "review", f"hit max_rounds={max_rounds} with {len(real)} open finding(s)")
+            break
+        # Fix on the SHARED tree (never isolated — fixes must accumulate so the next
+        # round re-reviews them). Group by file; parallel across DISTINCT files only.
+        phase(f"Fix round {round_n}")
+        by_file = {}
+        for f in real:
+            by_file.setdefault(f["file_path"], []).append(f)
+        def fix_file(path, items):
+            body = "\n\n".join(
+                f"- {x['title']} (L{x['line_start']}-{x['line_end']}): {x['body']}" for x in items)
+            prompt = (f"Fix these confirmed review findings in {path}. Edit the shared "
+                      f"working tree in place; do NOT create new files.\n{body}")
+            mdl = pool_model(path)
+            try:
+                agent(prompt, agent="task", model=mdl, label=f"fix:{path}")
+            except Exception as e:
+                alt = pool_alt(mdl, e)
+                try:
+                    if not alt: raise
+                    agent(prompt, agent="task", model=alt, label=f"fix:{path}:alt")
+                except Exception as e2:
+                    log(f"fix failed for {path}: {e2}")
+        parallel([lambda k=k, v=v: fix_file(k, v) for k, v in by_file.items()])
+        plog(S, "review", f"round {round_n}: dispatched fixes for {len(by_file)} file(s)")
+        # loop continues -> next round RE-REVIEWS the accumulated fixes
 ```
 
 ### CELL 1 body (after the helpers)
@@ -445,18 +663,20 @@ print(json.dumps({"dashboard": PLAN_PATH, "plan": plan}, indent=2))
 Author one eval cell: `SLUG = "..."` + HELPERS + this body. Everything derives
 from the file, so this cell also works cold (resume) with no kernel state.
 
-The review loop is **judge → verify → fix**: diverse reviewers (models from
-`modelRoles.reviewers`) fan out per lens, the judge keeps the real findings, then
-a per-finding **refute-verifier** re-checks each kept finding against the actual
-code before any fixer runs — the judge rules on finding *text*, so this catches
-plausible-but-wrong findings the judge can't. Verification is fail-open (a
-verifier error keeps the finding) and gated by `VERIFY_FINDINGS`; only *confirmed*
-findings reach fixers and `S["findings"]`. A round with nothing confirmed (all
-refuted) counts as clean. **Ultra runs** (`S["meta"]["ultra"]` set) swap only the
-front half — the reviewer fan-out and the judge are replaced by the genius duel of
-`ultra_review_round()`, whose cross-red-team subsumes the refute-verifier — while
-the shared back half (numeric gate, fixers, round loop, exit conditions) is the
-identical code, so normal runs are unaffected.
+The review loop is the shared **`run_review_loop()`** engine (in HELPERS, so
+`/superreview` drives the identical code). It is **judge → verify → fix**: diverse
+reviewers (models from `modelRoles.reviewers`) fan out per lens, the judge keeps
+the real findings, then a per-finding **refute-verifier** re-checks each kept
+finding against the actual code before any fixer runs — the judge rules on finding
+*text*, so this catches plausible-but-wrong findings the judge can't. Verification
+is fail-open (a verifier error keeps the finding) and gated by the loop's
+`verify_findings` knob (default on); only *confirmed* findings reach fixers and
+`S["findings"]`. A round with nothing confirmed (all refuted) counts as clean.
+**Ultra runs** (`S["meta"]["ultra"]` set) swap only the front half — the reviewer
+fan-out and the judge are replaced by the genius duel of `ultra_review_round()`,
+whose cross-red-team subsumes the refute-verifier — while the shared back half
+(numeric gate, fixers, round loop, exit conditions) is the identical code, so
+normal runs are unaffected.
 
 ```py
 S = load_state()
@@ -465,11 +685,10 @@ plan, TASK = S["plan"], S["spec"]
 S["meta"]["status"] = "building"
 save_state(S)
 
-MAX_ROUNDS = 3                   # hard cap on review->fix->reverify iterations
-VERIFY_FINDINGS = True           # gate fixers behind refute-verifiers (blind-judge fix)
-BUDGET_RESERVE = 60_000          # stop the loop if a hard budget dips below this
-
 _cfg_roles = read_model_roles()  # one config read for the whole cell (pool + reviewers)
+# Review-loop knobs (hard round cap, refute-verify gate, budget floor) are the
+# run_review_loop() defaults — the shared engine lives in HELPERS so /superreview
+# drives the identical loop.
 
 # Load-balance plain "task" spawns across subscriptions. omp role chains are
 # fallback-only (no rotation; in-flight caps queue, not spill), so the pipeline
@@ -744,209 +963,10 @@ else:
         plog(S, "build", f"synthesized {len(patches)} patch(es)")
 
 # ============================================================================
-# REVIEW -> FIX -> REVERIFY  (real loop until a clean round)
+# REVIEW -> FIX -> REVERIFY  (shared engine — see run_review_loop in HELPERS;
+# /superreview drives the SAME function over a standalone diff)
 # ============================================================================
-S["meta"]["status"] = "reviewing"
-save_state(S)
-lenses = plan.get("review_lenses") or ["correctness", "security", "edge-cases", "design"]
-if "over-engineering" not in lenses:      # standing ponytail lens
-    lenses = lenses + ["over-engineering"]
-
-# Standing over-engineering rubric — shared by the per-lens deep-reviewer (normal
-# path) and the holistic genius review (ultra path, where over-engineering is one
-# of the lenses folded into a single review).
-PONY_RUBRIC = (
-    "Apply the ponytail (lazy-senior-dev) rubric: flag unnecessary abstractions "
-    "(interface/factory/config with one use), scaffolding 'for later', a NEW "
-    "dependency where stdlib/native/a few lines suffice, re-implementation of "
-    "something already in the codebase, a symptom-patch where a shared root-cause "
-    "fix is a smaller diff, and explanation longer than the code. For each, give "
-    "the simpler alternative. Do NOT flag validation, error handling, security, "
-    "accessibility, or explicitly-requested work — those are never 'bloat'.")
-
-# ULTRA review seats: reuse the plato/aristotle chains FROZEN into run state at
-# plan time (never a live re-read — same plan-time-identity contract as planning,
-# so editing modelRoles mid-run / on resume doesn't retarget). None for normal
-# runs, which take the deep-reviewer fan-out path unchanged.
-UR = S["meta"].get("ultra")
-
-def review_specs():
-    # DIVERSE MODELS on ONE clean reviewer: deep-reviewer has no native output
-    # schema, so the FINDINGS_SCHEMA call-site override applies cleanly (avoids
-    # oh-my-pi #3926 with the bundled `reviewer`). Diversity via model= per lens.
-    # `reviewers` is a DIVERSITY SET (entries alternate across lenses), NOT a
-    # fallback chain — though each entry MAY itself be a comma-joined chain. An
-    # empty diversity set is a misconfig, not a feature: fall back to the default.
-    review_models = list(_cfg_roles.get("reviewers")
-                         or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
-    return [{"agent": "deep-reviewer", "model": review_models[i % len(review_models)], "lens": lens}
-            for i, lens in enumerate(lenses)]
-
-def run_reviewer(s):
-    rubric = "" if s["lens"] != "over-engineering" else " " + PONY_RUBRIC
-    try:
-        r = agent(
-            "Review the current UNCOMMITTED changes (inspect via `git diff` and read "
-            "the touched files) that implement:\n" + TASK +
-            f"\n\nFocus lens: {s['lens']}. Report ONLY real, patch-anchored defects."
-            + rubric,
-            agent=s["agent"], model=s["model"], label=f"review:{s['lens']}",
-            schema=FINDINGS_SCHEMA)
-        return r.get("findings", [])
-    except Exception as e:                 # schema-violation / unknown-agent -> skip lens
-        log(f"reviewer {s['agent']}/{s['lens']} failed: {e}")
-        return []
-
-def ultra_review_round(round_n):
-    # ULTRA path: duel-shaped genius review (the review analog of the ultra PLAN
-    # duel). Two frozen genius seats read the diff BLIND, each red-teams the
-    # RIVAL's findings, then plato (sole owner, same as plan synthesis) emits the
-    # kept set + per-lens verdicts. HOLISTIC: each genius covers ALL lenses in one
-    # pass (a per-lens genius fan-out would blow up cost) — lenses go in as a
-    # rubric. The cross-red-team SUBSUMES the refute-verifier (the rival already
-    # tried to knock each finding down), so the synthesis output IS the confirmed
-    # set; no task-tier verify spawns. Agent persona stays deep-reviewer (no native
-    # schema -> the FINDINGS_SCHEMA call-site override applies cleanly, oh-my-pi
-    # #3926); only the MODEL is swapped to the genius chain.
-    # Returns (union_raw, kept, verdicts): union_raw is only for the `found` count
-    # and the clean check; kept carries fresh ids for the shared downstream.
-    plato, aristotle = UR["plato"], UR["aristotle"]
-    rev = ("Review the current UNCOMMITTED changes (inspect via `git diff` and read "
-           "the touched files) that implement:\n" + TASK +
-           "\n\nCover ALL these lenses in this one review: " + ", ".join(lenses) +
-           ". Report ONLY real, patch-anchored defects. " + PONY_RUBRIC)
-    bp, ba = parallel([
-        lambda: agent(rev, agent="deep-reviewer", model=plato,
-                      label=f"ureview:plato:{round_n}", schema=FINDINGS_SCHEMA),
-        lambda: agent(rev, agent="deep-reviewer", model=aristotle,
-                      label=f"ureview:aristotle:{round_n}", schema=FINDINGS_SCHEMA)])
-    fp, fa = bp.get("findings", []), ba.get("findings", [])
-    union = fp + fa
-    for i, f in enumerate(union):          # stable ids so the critiques can cite them
-        f["id"] = f"r{round_n}-{i}"
-    if not union:
-        return [], [], []                  # clean -> shared code treats like no findings
-    def _rteam(rival):
-        return ("Red-team these code-review findings raised by the RIVAL reviewer "
-                "against the ACTUAL code — adversarial, no praise. For each, say "
-                "whether it is a real, patch-anchored defect or a false positive / "
-                "nit / dupe, with concrete evidence (file:line + why).\n\nTASK:\n" +
-                TASK + "\n\nRIVAL FINDINGS:\n" + json.dumps(rival))
-    cp, ca = parallel([
-        # plato red-teams aristotle's findings, and vice versa
-        lambda: agent(_rteam(fa), agent="deep-reviewer", model=plato,
-                      label=f"ucritique:plato:{round_n}"),
-        lambda: agent(_rteam(fp), agent="deep-reviewer", model=aristotle,
-                      label=f"ucritique:aristotle:{round_n}")])
-    syn = agent(
-        "You are the SOLE OWNER of this review. Given both blind reviews and each "
-        "reviewer's red-team of the other, emit the FINAL set of real, patch-anchored "
-        "defects worth fixing: keep only findings that survived the cross-red-team "
-        "with evidence; drop nits, dupes, and false positives; merge duplicates. Also "
-        "return one verdict per lens (clean | issues_remain).\n\nTASK:\n" + TASK +
-        "\n\nPLATO FINDINGS:\n" + json.dumps(fp) +
-        "\n\nARISTOTLE FINDINGS:\n" + json.dumps(fa) +
-        "\n\nPLATO RED-TEAM (of aristotle):\n" + cp +
-        "\n\nARISTOTLE RED-TEAM (of plato):\n" + ca,
-        agent="deep-reviewer", model=plato, label=f"usynth:{round_n}",
-        schema=UREVIEW_SCHEMA)
-    kept = syn.get("findings", [])
-    for i, f in enumerate(kept):           # fresh ids on the authoritative kept set
-        f["id"] = f"r{round_n}-{i}"
-    return union, kept, syn.get("verdicts", [])
-
-round_n = len(S["review_rounds"])          # resume-safe: continue the count
-while True:
-    round_n += 1
-    if budget.total and budget.remaining() < BUDGET_RESERVE:   # gate on total FIRST
-        plog(S, "review", f"budget low ({budget.remaining()}); stopping at round {round_n}")
-        break
-    phase(f"Review round {round_n}" + (" [ultra]" if UR else ""))
-    # FRONT HALF branches on the run kind; everything below "keep_candidates" is
-    # SHARED so normal /supership runs execute the identical back half.
-    if UR:
-        # Ultra: genius duel -> synthesis already emits the confirmed keep set
-        # (cross-red-team subsumed the refute-verifier). verdicts come from synthesis.
-        findings, keep_candidates, verdicts = ultra_review_round(round_n)
-    else:
-        groups = parallel([lambda s=s: run_reviewer(s) for s in review_specs()])
-        findings = [f for g in groups for f in g]
-        for i, f in enumerate(findings):
-            f["id"] = f"r{round_n}-{i}"
-        if findings:
-            judged = completion(
-                "You are the review judge. For each finding, keep=true ONLY if it is a real, "
-                "in-scope defect worth fixing (drop nits, dupes, false positives). Then give a "
-                "per-lens verdict.\nFINDINGS:\n" + json.dumps(findings),
-                model="slow", schema=JUDGE_SCHEMA)
-            keep_ids = {d["id"] for d in judged["decisions"] if d["keep"]}
-            keep_candidates = [f for f in findings if f["id"] in keep_ids]
-            verdicts = judged["verdicts"]
-        else:
-            keep_candidates, verdicts = [], []
-    if not findings:
-        S["review_rounds"].append({"round": round_n, "found": 0, "kept": 0, "verdicts": []})
-        plog(S, "review", f"round {round_n}: clean — no findings")
-        break
-    # Shared numeric gate (both paths): only actionable, high-confidence defects.
-    real = [f for f in keep_candidates if f["priority"] <= 1 and f["confidence"] >= 0.6]
-    kept_n = len(real)   # kept AFTER the numeric gate, BEFORE the refute-verify gate
-    # VERIFY (NORMAL path only — blind-judge fix): the completion judge rules on the
-    # finding TEXT, never the code, so a plausible-but-wrong finding survives. Gate
-    # the fixers behind a per-finding verifier that tries to REFUTE it against the
-    # real code; only confirmed findings reach fixers / S["findings"]. Fail-OPEN
-    # (infra noise must never silently drop a judge-kept finding). Zero-kept rounds
-    # spawn none. Ultra rounds SKIP this: the genius cross-red-team already refuted-
-    # or-confirmed each finding, so kept == confirmed with no task-tier verify.
-    if not UR and VERIFY_FINDINGS and real:
-        def verify_finding(f):
-            try:
-                v = agent("Try to REFUTE this code-review finding against the actual code. "
-                          "Read the files; run cheap checks if useful. confirmed=true ONLY "
-                          "with concrete evidence (file:line + why it is really a defect). "
-                          "If you cannot confirm with evidence, it is refuted (confirmed=false)."
-                          "\n\nTASK CONTEXT:\n" + TASK + "\n\nFINDING:\n" + json.dumps(f),
-                          agent="task", model=pool_model(f["id"]), label=f"verify:{f['id']}",
-                          schema=VERIFY_SCHEMA)
-                return {**f, "verified": v["confirmed"], "evidence": v["evidence"]}
-            except Exception as e:
-                # fail-OPEN: infra noise must never silently drop a judge-kept finding
-                return {**f, "verified": True, "evidence": f"verifier error (kept): {e}"}
-        real = [f for f in parallel([lambda f=f: verify_finding(f) for f in real]) if f["verified"]]
-    S["review_rounds"].append({"round": round_n, "found": len(findings),
-                               "kept": kept_n, "confirmed": len(real),
-                               "verdicts": verdicts})
-    S["findings"].extend(real)
-    plog(S, "review", f"round {round_n}: {len(findings)} found, {kept_n} kept, {len(real)} confirmed")
-    if not real:
-        break
-    if round_n >= MAX_ROUNDS:
-        plog(S, "review", f"hit MAX_ROUNDS={MAX_ROUNDS} with {len(real)} open finding(s)")
-        break
-    # Fix on the SHARED tree (never isolated — fixes must accumulate so the next
-    # round re-reviews them). Group by file; parallel across DISTINCT files only.
-    phase(f"Fix round {round_n}")
-    by_file = {}
-    for f in real:
-        by_file.setdefault(f["file_path"], []).append(f)
-    def fix_file(path, items):
-        body = "\n\n".join(
-            f"- {x['title']} (L{x['line_start']}-{x['line_end']}): {x['body']}" for x in items)
-        prompt = (f"Fix these confirmed review findings in {path}. Edit the shared "
-                  f"working tree in place; do NOT create new files.\n{body}")
-        mdl = pool_model(path)
-        try:
-            agent(prompt, agent="task", model=mdl, label=f"fix:{path}")
-        except Exception as e:
-            alt = pool_alt(mdl, e)
-            try:
-                if not alt: raise
-                agent(prompt, agent="task", model=alt, label=f"fix:{path}:alt")
-            except Exception as e2:
-                log(f"fix failed for {path}: {e2}")
-    parallel([lambda k=k, v=v: fix_file(k, v) for k, v in by_file.items()])
-    plog(S, "review", f"round {round_n}: dispatched fixes for {len(by_file)} file(s)")
-    # loop continues -> next round RE-REVIEWS the accumulated fixes
+run_review_loop(S, plan, TASK, _cfg_roles)
 
 # ============================================================================
 # CONSOLIDATE
