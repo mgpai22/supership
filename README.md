@@ -112,6 +112,14 @@ Routing is **subscription-aware**, two layers:
   subsequent pieces route away proactively. Ordinary task failures never
   trigger cross-provider fallback.
 
+**Multiple accounts per provider** (several Claude Max / Codex logins)
+compose cleanly: omp natively hash-sticks each subagent session to one
+account and rotates off blocked/exhausted siblings, so intra-provider
+spreading is automatic. `pool_healthy()` evaluates the ledger **per
+account** and only marks a provider unhealthy when every account is
+drained or credential-blocked — one healthy Max account keeps the whole
+anthropic pool entry usable.
+
 ## How the pipeline works
 
 ```

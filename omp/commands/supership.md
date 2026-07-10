@@ -284,10 +284,17 @@ def pool_healthy(model):
         prov = _prov(model)
         db = sqlite3.connect("file:" + os.path.expanduser(
             "~/.omp/agent/agent.db") + "?mode=ro", uri=True)
+        # usage_history is per ACCOUNT (multiple Max/Codex logins each write
+        # their own rows). Health is per account; the provider is unhealthy
+        # only when EVERY account is drained — omp natively hash-sticks each
+        # subagent to an account and rotates off blocked siblings, so one
+        # healthy account keeps the provider usable.
         rows = db.execute(
-            "SELECT limit_id, status, used_fraction FROM usage_history "
-            "WHERE provider=? AND recorded_at IN (SELECT MAX(recorded_at) FROM "
-            "usage_history WHERE provider=? GROUP BY limit_id)", (prov, prov)).fetchall()
+            "SELECT account_key, limit_id, status, used_fraction FROM usage_history "
+            "WHERE provider=? AND (account_key, limit_id, recorded_at) IN ("
+            "  SELECT account_key, limit_id, MAX(recorded_at) FROM usage_history"
+            "  WHERE provider=? GROUP BY account_key, limit_id)",
+            (prov, prov)).fetchall()
         n_creds = db.execute(
             "SELECT COUNT(*) FROM auth_credentials WHERE provider=? "
             "AND disabled_cause IS NULL", (prov,)).fetchone()[0]
@@ -297,13 +304,16 @@ def pool_healthy(model):
             (prov + ":%", int(time.time() * 1000))).fetchone()[0]
         db.close()
         if n_creds and n_blocked >= n_creds: return False
-        for lid, status, frac in rows:
+        acct_ok = {}
+        for ak, lid, status, frac in rows:
             # Ignore limits scoped to a model class this entry doesn't use
             # (anthropic:7d:fable must not gate a sonnet spawn).
             extra = [x for x in lid.lower().split(":")[1:]
                      if x not in ("primary", "secondary", "5h", "7d", "weekly", "default")]
             if extra and not any(x in model.lower() for x in extra): continue
-            if status == "exhausted" or (frac or 0) >= POOL_FULL: return False
+            bad = status == "exhausted" or (frac or 0) >= POOL_FULL
+            acct_ok[ak] = acct_ok.get(ak, True) and not bad
+        if acct_ok and not any(acct_ok.values()): return False
     except Exception:
         pass
     return True
