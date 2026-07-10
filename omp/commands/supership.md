@@ -447,6 +447,9 @@ _cfg_roles = read_model_roles()  # one config read for the whole cell (pool + re
 # health-checked per provider; weight by repeating an entry. Configured via
 # modelRoles.taskpool; an explicit taskpool:[] DISABLES pooling (model=None),
 # while an ABSENT key yields the default pair. Explicit agents never pool.
+# Caveat: the config read is fail-open — if it errors, an explicit [] is
+# indistinguishable from absent and the default pool re-enables (benign, and
+# near-unreachable: the same omp process serving the read runs this cell).
 TASK_MODEL_POOL = list(_cfg_roles["taskpool"] if "taskpool" in _cfg_roles
                        else ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"])
 POOL_FULL = 0.95          # used_fraction at/above which a subscription is "full"
