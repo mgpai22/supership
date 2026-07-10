@@ -3,25 +3,39 @@
 # ./install.sh --config, which applies them via `omp config set`).
 
 modelRoles:
-  # ┌─ Fallback chains as COMMA-SEPARATED STRINGS (first resolvable model
-  # │  wins). YAML lists crash the pi/<role> resolver on omp < 16.3.7
-  # │  (can1357/oh-my-pi#4492, fixed in 16.3.7) — strings work everywhere,
-  # │  so keep strings.
-  # │  NOTE: cursor/gpt-5.6-* models bake the reasoning effort into the
-  # │  model ID (…-medium/-high/-xhigh) — no `:thinking` suffix for those.
+  # ┌─ Fallback chains as YAML LISTS, in order (first resolvable model wins).
+  # │  REQUIRES omp >= 16.3.7: list values crash the pi/<role> resolver on
+  # │  older builds (can1357/oh-my-pi#4492). On < 16.3.7, flatten each list
+  # │  to one comma-separated string — identical semantics.
   # └────────────────────────────────────────────────────────────────────────
   # main agent
-  default: "cursor/gpt-5.6-sol-high, anthropic/claude-opus-4-8:high"
+  default:
+    - openai-codex/gpt-5.6-sol:high
+    - anthropic/claude-opus-4-8:high
   # cheap scouts (david-research, explore, librarian, sonic)
-  smol: "cursor/gpt-5.6-luna-high, google-antigravity/gemini-3.5-flash:medium, anthropic/claude-haiku-4-5:medium"
+  smol:
+    - openai-codex/gpt-5.6-luna:high
+    - google-antigravity/gemini-3.5-flash:medium
+    - anthropic/claude-haiku-4-5:medium
   # reviewer tier + the review judge
-  slow: "cursor/gpt-5.6-sol-high, anthropic/claude-fable-5:high"
+  slow:
+    - openai-codex/gpt-5.6-sol:high
+    - anthropic/claude-fable-5:high
   # GENIUS chain (planner / deep-debugger): super-smart, slow
-  plan: "anthropic/claude-fable-5:high, cursor/gpt-5.6-sol-xhigh, anthropic/claude-opus-4-8:max"
+  plan:
+    - anthropic/claude-fable-5:high
+    - openai-codex/gpt-5.6-sol:xhigh
+    - anthropic/claude-opus-4-8:max
   # mechanical workers (the task agent)
-  task: "cursor/gpt-5.6-terra-medium, anthropic/claude-sonnet-5:high"
-  advisor: "anthropic/claude-fable-5:high, cursor/gpt-5.6-sol-xhigh"
-  designer: "cursor/gpt-5.6-sol-medium, zai/glm-5.2:high"
+  task:
+    - openai-codex/gpt-5.6-terra:medium
+    - anthropic/claude-sonnet-5:high
+  advisor:
+    - anthropic/claude-fable-5:high
+    - openai-codex/gpt-5.6-sol:xhigh
+  designer:
+    - openai-codex/gpt-5.6-sol:medium
+    - zai/glm-5.2:high
 
 task:
   # Default is 2, which tool-strips deep-debugger when a task agent spawns it

@@ -55,10 +55,11 @@ Then restart your omp session. `plan.html` runs are auto-gitignored per repo
 - **omp ≥ v16.2.8** — earlier snapcompact builds can wedge long sessions
   (unbounded frame payloads -> `Anthropic Internal server error` on resume;
   fixed by [oh-my-pi PR #3866](https://github.com/can1357/oh-my-pi/pull/3866)).
-- **`modelRoles` fallback chains: use comma-separated STRINGS** — YAML list
-  values crash omp's `pi/<role>` resolver on < 16.3.7
+- **`modelRoles` chains ship as YAML lists — requires omp ≥ 16.3.7.** List
+  values crash the `pi/<role>` resolver on older builds
   ([oh-my-pi #4492](https://github.com/can1357/oh-my-pi/issues/4492), fixed in
-  16.3.7); strings work on every version, so the kit ships strings.
+  16.3.7); on < 16.3.7, flatten each list to one comma-separated string
+  (identical semantics).
 - **`task.softRequestBudget: 250` + `task.softRequestBudgetNotice: true`**
   (defaults: 90, notice **off**). omp hard-aborts any subagent at **1.5× the
   budget** — with the defaults that's a silent kill at 135 requests, which this
@@ -72,7 +73,7 @@ Then restart your omp session. `plan.html` runs are auto-gitignored per repo
   main = 0, each `agent()` child +1, spawn allowed while `depth < cap`, eval
   hard cap 3 ([oh-my-pi #4493](https://github.com/can1357/oh-my-pi/issues/4493)).
 - The model roles reference providers you must have authenticated in omp
-  (Anthropic, Cursor, Google-Antigravity, ZAI in the shipped set) — edit
+  (Anthropic, OpenAI-Codex, Google-Antigravity, ZAI in the shipped set) — edit
   `config/modelRoles.json` to match your catalog (`omp models`).
 - Reviewers use `deep-reviewer` (not the bundled `reviewer`) with call-site
   schemas — avoids an intermittent schema-violation with the bundled agent's

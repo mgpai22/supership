@@ -1,9 +1,9 @@
 {
-  "default": "cursor/gpt-5.6-sol-high, anthropic/claude-opus-4-8:high",
-  "smol": "cursor/gpt-5.6-luna-high, google-antigravity/gemini-3.5-flash:medium, anthropic/claude-haiku-4-5:medium",
-  "slow": "cursor/gpt-5.6-sol-high, anthropic/claude-fable-5:high",
-  "plan": "anthropic/claude-fable-5:high, cursor/gpt-5.6-sol-xhigh, anthropic/claude-opus-4-8:max",
-  "task": "cursor/gpt-5.6-terra-medium, anthropic/claude-sonnet-5:high",
-  "advisor": "anthropic/claude-fable-5:high, cursor/gpt-5.6-sol-xhigh",
-  "designer": "cursor/gpt-5.6-sol-medium, zai/glm-5.2:high"
+  "default": ["openai-codex/gpt-5.6-sol:high", "anthropic/claude-opus-4-8:high"],
+  "smol": ["openai-codex/gpt-5.6-luna:high", "google-antigravity/gemini-3.5-flash:medium", "anthropic/claude-haiku-4-5:medium"],
+  "slow": ["openai-codex/gpt-5.6-sol:high", "anthropic/claude-fable-5:high"],
+  "plan": ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh", "anthropic/claude-opus-4-8:max"],
+  "task": ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"],
+  "advisor": ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh"],
+  "designer": ["openai-codex/gpt-5.6-sol:medium", "zai/glm-5.2:high"]
 }
