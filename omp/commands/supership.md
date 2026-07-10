@@ -185,6 +185,40 @@ def read_model_roles():
     except Exception:
         return {}
 
+# ---- project agents: repo-vendored implementers (.omp/agents/*.md) ----------
+# Discovered at plan time so the planner can assign pieces to a repo's own
+# specialized builders (e.g. a convex-dev or expo-mobile agent). Kit/system
+# personas are excluded — they are pipeline machinery, not piece owners.
+# Empty/no .omp/agents -> exactly today's behavior.
+_AGENT_EXCLUDE = {"task", "deep-debugger", "designer", "planner", "deep-reviewer",
+                  "reviewer", "review-orchestrator", "david-research"}
+def project_agents():
+    out, seen = [], set()
+    try:
+        import glob as _g
+        for f in sorted(_g.glob(os.path.join(".omp", "agents", "*.md"))):
+            # utf-8-sig: a BOM before --- must not hide the agent
+            src = open(f, encoding="utf-8-sig", errors="ignore").read()
+            m = re.match(r"^---\s*\n(.*?)\n---", src, re.S)
+            if not m: continue
+            # quote-aware: `name: "x"` registers in omp as x, so capture x
+            name = re.search(r"^name:\s*[\"']?([A-Za-z0-9_.-]+)[\"']?\s*$",
+                             m.group(1), re.M)
+            desc = re.search(r"^description:\s*(.+)$", m.group(1), re.M)
+            if not name or name.group(1) in _AGENT_EXCLUDE or name.group(1) in seen:
+                continue
+            seen.add(name.group(1))
+            d = (desc.group(1).strip() if desc else "").strip("\"'")
+            if re.fullmatch(r"[>|][+-]?", d):
+                d = ""   # YAML block scalar: the text lives on following lines
+            out.append({"name": name.group(1), "description": d[:300]})
+    except Exception:
+        pass
+    return out
+
+PROJECT_AGENTS = project_agents()
+AGENT_ENUM = ["task", "deep-debugger", "designer"] + [a["name"] for a in PROJECT_AGENTS]
+
 # ---- SCHEMAS (JSON Schema dialect; descriptions survive) ---------------------
 PLAN_SCHEMA = {
     "type": "object", "additionalProperties": False,
@@ -201,8 +235,8 @@ PLAN_SCHEMA = {
                 "properties": {
                     "id": {"type": "string", "description": "Stable short id, e.g. p1"},
                     "description": {"type": "string", "description": "Complete standalone instruction for this piece's implementer"},
-                    "agent": {"type": "string", "enum": ["task", "deep-debugger", "designer"],
-                        "description": "task for mechanical work; designer when the piece's PRIMARY deliverable is user-facing UI (components, styling, layout, UX, client-side interactivity — building new frontend, modifying, or improving it); deep-debugger only if the piece needs hard diagnosis first"}}}},
+                    "agent": {"type": "string", "enum": AGENT_ENUM,
+                        "description": "task for mechanical work; designer when the piece's PRIMARY deliverable is user-facing UI (components, styling, layout, UX, client-side interactivity — building new frontend, modifying, or improving it); deep-debugger only if the piece needs hard diagnosis first; or a PROJECT AGENT from the plan prompt's roster when the piece falls squarely in its documented domain"}}}},
         "review_lenses": {"type": "array", "items": {"type": "string"},
             "description": "Review focuses to fan out, e.g. correctness, security, edge-cases, design"},
         "notes": {"type": "string", "description": "Sequencing constraints + synthesis/verify guidance"},
@@ -570,7 +604,12 @@ PLAN_PROMPT = (
     "client-side interactivity); keep `task` for backend/API/data/build-config; "
     "prefer SPLITTING a half-UI/half-backend piece into a `designer` piece + a "
     "`task` piece when both are substantial, else tag by the dominant surface."
-    "\n\nTASK:\n" + TASK)
+    + ("" if not PROJECT_AGENTS else
+       "\n\nPROJECT AGENTS — this repo vendors specialized implementers. Assign a "
+       "piece to one when it falls squarely in its documented domain; otherwise "
+       "use task/designer as above:\n"
+       + "\n".join(f"- {a['name']}: {a['description']}" for a in PROJECT_AGENTS))
+    + "\n\nTASK:\n" + TASK)
 
 PLATO = ARISTOTLE = None
 if not ULTRA:
@@ -1121,6 +1160,12 @@ is complete on disk. `run_build` salvages that case automatically
 - **Agent selection is an invariant, not a preference:** plan/consult → `planner`,
   hard diagnosis → `deep-debugger`, review → `deep-reviewer` — always via an
   explicit `agent=`. A `role=` string alone NEVER substitutes for `agent=`.
+- **Repo-vendored agents are first-class piece owners.** `.omp/agents/*.md` is
+  auto-discovered at plan time (`project_agents()`), added to the plan schema's
+  agent enum, and listed in the plan prompt so the planner assigns pieces to a
+  repo's specialists (they run with their own frontmatter model, skills, and
+  spawn whitelist). Kit/system personas are excluded; no `.omp/agents` = the
+  base enum, exactly as before. Project agents never join the task pool.
 - Only parallelize (and only isolate) when `planner` says `mode=parallel` **and**
   `overlap=true`. Isolation costs worktrees + a synthesis step.
 - All dashboard writes happen at DRIVER level (between/after waves), never from

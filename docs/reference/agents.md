@@ -20,6 +20,10 @@ The kit ships a roster of global agents. The pipeline spawns them by name via `a
 
 The exact model strings live in the `modelRoles` config and in each agent's frontmatter chain, and both are tunable. See [Configuration](/reference/configuration).
 
+## Project agents
+
+A repo can vendor its own specialists in `.omp/agents/*.md`. The pipeline discovers them at plan time, adds them to the plan schema's agent choices, and lists each one with its description in the plan prompt, so the planner assigns pieces to them when the work falls squarely in their documented domain. Each runs with its own frontmatter model, skills, and spawn whitelist. Kit personas are excluded from discovery, and a repo without `.omp/agents` gets the base choices unchanged. Project agents do not join the task pool rotation.
+
 ## Bundled omp scouts
 
 The planner and the genius agents also spawn omp's own bundled scouts, which are not part of this kit: `explore` (read-only local codebase scout) and `librarian` (library and API source). Both run on the cheap `smol` role. These keep fact-finding off the expensive genius reasoning.
