@@ -180,10 +180,11 @@ the key falls back to the shipped default pair.
 
 The base pipeline plans with a single genius. The **ultra** variant runs the
 **exact same pipeline** but replaces that one planner with **two** genius seats
-that debate the plan before anything is built — then hands the agreed plan to the
-unchanged execute → review → consolidate machinery. Use it when the plan is the
-risky part (ambiguous architecture, big blast radius, one-shot migrations); skip
-it when the work is mechanical.
+that debate the plan before anything is built, then hands the agreed plan to the
+unchanged execute → consolidate machinery — and reviews genius-tier too (see
+[Ultra review](#ultra-review) below). Use it when the plan is the risky part
+(ambiguous architecture, big blast radius, one-shot migrations); skip it when the
+work is mechanical.
 
 Two model-role seats you configure (see `config/`):
 
@@ -210,6 +211,36 @@ presentation tells you the topology and its genius spend); `/ultrashipit <topo>
 builder is re-adjudicated by the **challenger** (aristotle), not the plan's
 author — the model that red-teamed the plan is best placed to reopen it. `bug`
 escalations still go to `deep-debugger`.
+
+### Ultra review
+
+Ultra doesn't stop at the plan — it also reviews genius-tier, because a diff worth
+two geniuses debating the plan is worth two geniuses reviewing. Each review round
+is a **fixed duel** of the same two seats:
+
+1. `plato` and `aristotle` each review the diff **blind** — one holistic pass
+   covering **all** lenses at once (the lenses become a rubric; no per-lens genius
+   fan-out, which would blow up cost). Persona stays `deep-reviewer` (clean
+   call-site schema), only the model is the genius chain.
+2. Each **red-teams the rival's** findings against the actual code.
+3. `plato` **synthesizes** the final kept set as sole owner + per-lens verdicts.
+
+The cross-red-team **subsumes** the normal refute-verifier — the rival already
+tried to knock each finding down — so ultra rounds run no separate `task` verify
+pass; the synthesis output *is* the confirmed set (still passed through the same
+`priority`/`confidence` numeric gate). Everything after "here are the confirmed
+findings" — fixers, the round loop, `MAX_ROUNDS`, budget gate, clean detection,
+dashboard `found`/`kept`/`confirmed` records — is the **identical code** the normal
+loop runs, so normal `/supership` runs are byte-for-byte unaffected.
+
+The review shape is a **fixed duel regardless of the plan topology** (crossreview
+and debate don't map to review — you don't "revise a review," you re-review after
+fixes, which the outer round loop already does). Cost is bounded: ~5 genius calls
+per round, early-exit on a clean round, capped at `MAX_ROUNDS`. The seats are read
+from the **frozen run state**, not live config, so review uses the same brains
+that planned and a resumed run doesn't retarget. No new config, no new command —
+it rides the same `ULTRA` flag; you cannot get ultra review on a normally-planned
+run (an accepted non-goal).
 
 **Config the seats** (merge into `modelRoles`, e.g. via `./install.sh --config`):
 
