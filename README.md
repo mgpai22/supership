@@ -88,14 +88,29 @@ ladder inline, and the consolidate step harvests `// ponytail:` debt markers;
 installing ponytail globally reinforces the same discipline in ordinary
 (non-pipeline) sessions.
 
-## Load balancing across subscriptions
+## Load balancing across subscriptions (usage-aware)
 
 omp's `modelRoles` chains are fallback-only (first resolvable model always
 wins — no native rotation, and provider in-flight caps queue rather than
-spill over). So Cell 2 rotates explicitly: `TASK_MODEL_POOL` round-robins
+spill over). So Cell 2 routes explicitly: `TASK_MODEL_POOL` round-robins
 plain `task` builders and fixers across models/subscriptions via
 `agent(model=...)`, deterministically by piece order (resume-safe). Weight by
 repeating an entry; set `[]` to disable. Genius agents never pool.
+
+Routing is **subscription-aware**, two layers:
+- **Proactive** — before each spawn, `pool_healthy()` reads omp's own durable
+  usage ledger (`~/.omp/agent/agent.db`: `usage_history` used-fraction/status
+  per limit window + `auth_credential_blocks`) and walks past any pool entry
+  whose subscription is exhausted (≥ `POOL_FULL`, default 0.95) or whose
+  credentials are all blocked. Model-class-scoped limits are respected
+  (an exhausted `anthropic:7d:fable` window doesn't gate a sonnet spawn).
+  Fail-open: if the ledger can't be read, the entry counts as healthy.
+- **Reactive** — if a spawn dies with a usage-limit/quota/auth-exhaustion
+  error (omp gives up after ≤3 fast internal same-provider retries),
+  `pool_alt()` re-dispatches that piece once on the other provider
+  (`build:pX:alt`) and skip-lists the failed provider for 30 minutes, so
+  subsequent pieces route away proactively. Ordinary task failures never
+  trigger cross-provider fallback.
 
 ## How the pipeline works
 

@@ -259,17 +259,74 @@ MAX_ROUNDS = 3                   # hard cap on review->fix->reverify iterations
 BUDGET_RESERVE = 60_000          # stop the loop if a hard budget dips below this
 
 # Load-balance plain "task" spawns across subscriptions. omp role chains are
-# fallback-only (first resolvable ALWAYS wins — no native rotation), so the
-# pipeline rotates explicitly via agent(model=...). Round-robin by piece order
-# (deterministic + resume-safe); weight by repeating an entry; [] disables
-# (role chain decides). Explicit agents (planner/deep-debugger) never pool.
+# fallback-only (no rotation; in-flight caps queue, not spill), so the pipeline
+# routes explicitly via agent(model=...): deterministic round-robin by piece
+# order, made SUBSCRIPTION-AWARE via omp's own durable usage ledger
+# (~/.omp/agent/agent.db: usage_history + auth_credential_blocks — the same
+# data `omp usage` shows). Weight by repeating entries; [] disables.
+# Explicit agents (planner/deep-debugger) never pool.
 TASK_MODEL_POOL = ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"]
+POOL_FULL = 0.95          # used_fraction at/above which a subscription is "full"
+POOL_SKIP = {}            # provider -> unix ts to skip until (reactive marks)
+LIMIT_ERR = ("usage_limit_reached", "usage limit", "resource_exhausted",
+             "insufficient_quota", "quota will reset", "exhausted your capacity",
+             "rate limit", "no api key for provider", "no oauth credential available")
 PIECE_IDX = {p["id"]: i for i, p in enumerate(plan["pieces"])}
+
+def _prov(model): return model.split("/")[0]
+
+def pool_healthy(model):
+    # Proactive check against omp's ledger. Fail-open: read hiccup = healthy.
+    import time
+    if POOL_SKIP.get(_prov(model), 0) > time.time(): return False
+    try:
+        import sqlite3, os
+        prov = _prov(model)
+        db = sqlite3.connect("file:" + os.path.expanduser(
+            "~/.omp/agent/agent.db") + "?mode=ro", uri=True)
+        rows = db.execute(
+            "SELECT limit_id, status, used_fraction FROM usage_history "
+            "WHERE provider=? AND recorded_at IN (SELECT MAX(recorded_at) FROM "
+            "usage_history WHERE provider=? GROUP BY limit_id)", (prov, prov)).fetchall()
+        n_creds = db.execute(
+            "SELECT COUNT(*) FROM auth_credentials WHERE provider=? "
+            "AND disabled_cause IS NULL", (prov,)).fetchone()[0]
+        n_blocked = db.execute(
+            "SELECT COUNT(DISTINCT credential_id) FROM auth_credential_blocks "
+            "WHERE provider_key LIKE ? AND blocked_until_ms > ?",
+            (prov + ":%", int(time.time() * 1000))).fetchone()[0]
+        db.close()
+        if n_creds and n_blocked >= n_creds: return False
+        for lid, status, frac in rows:
+            # Ignore limits scoped to a model class this entry doesn't use
+            # (anthropic:7d:fable must not gate a sonnet spawn).
+            extra = [x for x in lid.lower().split(":")[1:]
+                     if x not in ("primary", "secondary", "5h", "7d", "weekly", "default")]
+            if extra and not any(x in model.lower() for x in extra): continue
+            if status == "exhausted" or (frac or 0) >= POOL_FULL: return False
+    except Exception:
+        pass
+    return True
+
 def pool_model(key, idx=None):
+    # Deterministic round-robin, then walk forward past unhealthy entries.
     if not TASK_MODEL_POOL: return None
     import zlib
     i = idx if idx is not None else zlib.crc32(str(key).encode())
-    return TASK_MODEL_POOL[i % len(TASK_MODEL_POOL)]
+    order = [TASK_MODEL_POOL[(i + k) % len(TASK_MODEL_POOL)]
+             for k in range(len(TASK_MODEL_POOL))]
+    return next((m for m in order if pool_healthy(m)), order[0])
+
+def pool_alt(mdl, err):
+    # Reactive cross-provider fallback. omp flattens errors to plain strings
+    # across the eval bridge (after <=3 fast internal same-provider retries),
+    # so classify by substring (mirrors pi-ai error/flags.ts). A limit hit
+    # skip-lists the provider for 30 min (dict write is GIL-atomic).
+    if not mdl or not any(s in str(err).lower() for s in LIMIT_ERR): return None
+    import time
+    POOL_SKIP[_prov(mdl)] = time.time() + 1800
+    return next((m for m in TASK_MODEL_POOL
+                 if _prov(m) != _prov(mdl) and pool_healthy(m)), None)
 
 LEAN = ("\n\nBuild LEAN (ponytail ladder): does this need to exist (YAGNI)? "
         "reuse what's already in the codebase → stdlib → native platform → an "
@@ -373,6 +430,19 @@ def run_build(p):
             return {"id": p["id"], "ok": True, "status": "done",
                     "summary": f"[salvaged after abort] {sal.get('summary','')}",
                     "why": None}
+        # Subscription exhausted? Flip to the other pool provider and
+        # re-dispatch this piece once there.
+        alt = pool_alt(mdl, e)
+        if alt:
+            plog(S, "build", f"{p['id']}: {_prov(mdl)} limit hit — re-dispatching on {alt}")
+            try:
+                r = agent(build_prompt(p), agent=ag, model=alt,
+                          label=f"build:{p['id']}:alt", schema=BUILD_SCHEMA)
+                ok = r["status"] == "done"
+                return {"id": p["id"], "ok": ok, "status": "done" if ok else "unresolved",
+                        "summary": r["summary"], "why": None if ok else (r.get("stuck") or r["summary"])}
+            except Exception as e2:
+                e = e2
         return {"id": p["id"], "ok": False, "status": "unresolved",
                 "summary": f"error: {e}", "why": f"error: {e}"}
 
@@ -519,12 +589,18 @@ while True:
     def fix_file(path, items):
         body = "\n\n".join(
             f"- {x['title']} (L{x['line_start']}-{x['line_end']}): {x['body']}" for x in items)
+        prompt = (f"Fix these confirmed review findings in {path}. Edit the shared "
+                  f"working tree in place; do NOT create new files.\n{body}")
+        mdl = pool_model(path)
         try:
-            agent(f"Fix these confirmed review findings in {path}. Edit the shared "
-                  f"working tree in place; do NOT create new files.\n{body}",
-                  agent="task", model=pool_model(path), label=f"fix:{path}")
+            agent(prompt, agent="task", model=mdl, label=f"fix:{path}")
         except Exception as e:
-            log(f"fix failed for {path}: {e}")
+            alt = pool_alt(mdl, e)
+            try:
+                if not alt: raise
+                agent(prompt, agent="task", model=alt, label=f"fix:{path}:alt")
+            except Exception as e2:
+                log(f"fix failed for {path}: {e2}")
     parallel([lambda k=k, v=v: fix_file(k, v) for k, v in by_file.items()])
     plog(S, "review", f"round {round_n}: dispatched fixes for {len(by_file)} file(s)")
     # loop continues -> next round RE-REVIEWS the accumulated fixes
