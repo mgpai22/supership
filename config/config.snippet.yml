@@ -38,6 +38,15 @@ modelRoles:
   designer:
     - openai-codex/gpt-5.6-sol:medium
     - zai/glm-5.2:high
+  # ultra seats (used only by /ultraship + /ultrashipit): plato = chief architect
+  # / final consolidator, aristotle = challenger. Putting the SAME model in both
+  # is legal (you just lose model diversity in the debate).
+  plato:
+    - anthropic/claude-fable-5:high
+    - anthropic/claude-opus-4-8:max
+  aristotle:
+    - openai-codex/gpt-5.6-sol:xhigh
+    - openai-codex/gpt-5.6-sol-pro:xhigh
 
 task:
   # Default is 2, which tool-strips deep-debugger when a task agent spawns it

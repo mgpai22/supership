@@ -25,6 +25,44 @@ resume-safe. The **file is the source of truth** — each cell re-reads it.
 
 The task: **$ARGUMENTS**
 
+## Ultra variant (/ultraship, /ultrashipit)
+
+`/ultraship` and `/ultrashipit` run this **exact** pipeline with `ULTRA = True`:
+the single planner in Cell 1 is replaced by **two** genius seats you configure as
+model roles — `plato` (chief architect / final consolidator) and `aristotle`
+(challenger). Everything after planning (execute, review loop, consolidate) is
+unchanged. Three topologies, selected by the first word of the arguments (default
+`duel`):
+
+- **crossreview** (3 genius calls) — plato plans → aristotle red-teams it → plato
+  revises its own plan.
+- **duel** (5) — plato and aristotle plan **blind** in parallel → each red-teams
+  the *rival's* plan in parallel → plato synthesizes THE plan as sole owner.
+- **debate** (7) — duel through the critiques, then one (and only one) revision
+  round where each genius revises its OWN plan given the rival + the critique it
+  received → plato synthesizes from the two revised plans. Hard cap: one round.
+
+The synthesis is single-owner, never a committee merge — plato adopts the
+strongest elements and records the adopted/rejected tradeoffs in the plan `notes`.
+
+In ultra runs, a builder stuck on a `design` question is consulted by
+**aristotle** (fresh eyes — the challenger, not the plan's author). The genius
+chains are frozen into the run state at plan time, so editing `modelRoles`
+mid-run does not retarget an in-flight or resumed run (plan-time identity is
+deliberate).
+
+**Why the pipeline reads the chains itself:** omp's `pi/<role>` alias resolver is
+hard-gated to built-in role names (≤ 16.3.15), so `model="pi/plato"` passes
+through unresolved and omp *silently* spawns an undefined-model session. Cell 1
+therefore reads `omp config get modelRoles --json` itself, asserts `plato` +
+`aristotle` are configured and non-empty (**loud fail** — it refuses to degrade to
+one genius), normalizes each chain to a comma-joined fallback string, and passes
+it via `model=` (a call-site `model=` beats the planner's frontmatter chain).
+
+**Fresh-eyes consult:** in an ultra run a `design` escalation is re-adjudicated by
+the *challenger* (aristotle), not the plan's author — see `consult()` in Cell 2.
+`bug` escalations still go to `deep-debugger`.
+
 ## 0. Clarify (interactive mode only — auto skips this entirely)
 
 The eval fan-out is autonomous — subagents cannot ask the user anything — so
@@ -45,6 +83,8 @@ Author one eval cell: the three assignments, then HELPERS, then CELL 1.
 ```py
 SLUG = "kebab-task-name-MMDD"      # MAIN: short kebab slug for this run
 MODE = "interactive"               # or "auto" (when invoked via /shipit)
+ULTRA = False                      # True only via /ultraship or /ultrashipit
+TOPOLOGY = "duel"                  # crossreview | duel | debate (ultra only)
 TASK = """..."""                   # MAIN: the CLARIFIED SPEC (or raw task in auto
                                    # mode) as a valid Python string — escape any
                                    # triple quotes; don't break the literal.
@@ -195,13 +235,109 @@ BUILD_SCHEMA = {
 ```py
 phase("Plan")
 ensure_gitignore()
-plan = agent(
+
+# Shared by the legacy single-planner path AND every ultra topology (each genius
+# gets the SAME task framing; only the model differs).
+PLAN_PROMPT = (
     "Produce a concrete execution plan for the task below. Investigate ONLY via "
     "your cheap subagents (explore/david-research/librarian) — do not grep or "
     "browse yourself. Decide sequential-vs-parallel honestly; most work is "
     "sequential (one implementer). If parallel, set overlap=true only when the "
-    "pieces may edit the SAME files.\n\nTASK:\n" + TASK,
-    agent="planner", label="plan", schema=PLAN_SCHEMA)
+    "pieces may edit the SAME files.\n\nTASK:\n" + TASK)
+
+PLATO = ARISTOTLE = None
+if not ULTRA:
+    plan = agent(PLAN_PROMPT, agent="planner", label="plan", schema=PLAN_SCHEMA)
+else:
+    # --- ultra preflight: resolve the two genius chains OURSELVES ------------
+    # omp's pi/<role> alias resolver is hard-gated to BUILT-IN role names
+    # (verified <=16.3.15): a custom role like pi/plato passes through
+    # unresolved and omp SILENTLY spawns an undefined-model session (the error
+    # is discarded). So read the chains from config and pass them as ordered
+    # comma-joined fallback strings via model= — a call-site model= beats the
+    # planner agent's own frontmatter chain.
+    # NOTE: in-session tool.bash returns {"text": <stdout>, "details": {...}}
+    # (raw string only when the tool emits no details, which bash always does).
+    _raw = tool.bash(command="omp config get modelRoles --json")
+    if isinstance(_raw, dict):
+        _raw = _raw.get("text", "")
+    _mr = json.loads(_raw)
+    _roles = _mr.get("value", _mr) if isinstance(_mr, dict) and "value" in _mr else _mr
+    assert _roles.get("plato") and _roles.get("aristotle"), (
+        "ultra needs modelRoles.plato + modelRoles.aristotle configured — "
+        "refusing to degrade to a single genius")
+    _norm = lambda v: ",".join(v) if isinstance(v, list) else v
+    PLATO, ARISTOTLE = _norm(_roles["plato"]), _norm(_roles["aristotle"])
+
+    def _crit(plan_json):    # adversarial red-team of ONE plan (free text, no schema)
+        return ("Red-team this execution plan against the task. Be specific and "
+                "adversarial — no praise, no summary. Call out wrong, missing, or "
+                "risky pieces; sequencing errors; simpler alternatives; and "
+                "approaches the author never considered.\n\nTASK:\n" + TASK +
+                "\n\nPLAN:\n" + plan_json)
+
+    def _synth(body):        # sole-owner consolidation into THE plan
+        return ("You are the SOLE OWNER of the final plan. Given the plan(s) and "
+                "critique(s) below, produce THE execution plan for the task: adopt "
+                "the strongest elements and discard the rest. A committee merge is "
+                "failure — own the tradeoffs. In the plan `notes`, explicitly record "
+                "what you took from the aristotle plan/critique and what you rejected "
+                "and why.\n\nTASK:\n" + TASK + "\n\n" + body)
+
+    if TOPOLOGY == "crossreview":                # 3 calls: plato plans -> aristotle
+        pl = agent(PLAN_PROMPT, agent="planner", model=PLATO,        # critiques ->
+                   label="plan:plato", schema=PLAN_SCHEMA)           # plato revises
+        cr = agent(_crit(json.dumps(pl)), agent="planner", model=ARISTOTLE,
+                   label="critique:aristotle")
+        plan = agent(
+            "Revise YOUR plan below, addressing every valid point in the critique; "
+            "produce the improved plan. In `notes`, record which critique points you "
+            "adopted vs rejected and why.\n\nTASK:\n" + TASK +
+            "\n\nYOUR PLAN:\n" + json.dumps(pl) + "\n\nCRITIQUE:\n" + cr,
+            agent="planner", model=PLATO, label="synthesis", schema=PLAN_SCHEMA)
+    else:
+        # duel + debate share a BLIND-plan opening (neither genius sees the other)
+        # then a parallel cross-critique (each red-teams the RIVAL's plan).
+        pl_p, pl_a = parallel([
+            lambda: agent(PLAN_PROMPT, agent="planner", model=PLATO,
+                          label="plan:plato", schema=PLAN_SCHEMA),
+            lambda: agent(PLAN_PROMPT, agent="planner", model=ARISTOTLE,
+                          label="plan:aristotle", schema=PLAN_SCHEMA)])
+        cr_p, cr_a = parallel([
+            # critique:plato = plato red-teaming aristotle's plan, and vice versa
+            lambda: agent(_crit(json.dumps(pl_a)), agent="planner", model=PLATO,
+                          label="critique:plato"),
+            lambda: agent(_crit(json.dumps(pl_p)), agent="planner", model=ARISTOTLE,
+                          label="critique:aristotle")])
+        if TOPOLOGY == "debate":                 # 7 calls: exactly ONE revision round
+            def _revise(own, rival, crit):
+                return ("Revise YOUR plan below. You have the rival's competing plan "
+                        "and a critique of your plan — address every valid point and "
+                        "steal the rival's best ideas. In `notes`, record what you "
+                        "changed and why.\n\nTASK:\n" + TASK + "\n\nYOUR PLAN:\n" + own +
+                        "\n\nRIVAL PLAN:\n" + rival + "\n\nCRITIQUE OF YOUR PLAN:\n" + crit)
+            rv_p, rv_a = parallel([
+                # each revises its OWN plan given the rival + the critique it RECEIVED
+                lambda: agent(_revise(json.dumps(pl_p), json.dumps(pl_a), cr_a),
+                              agent="planner", model=PLATO,
+                              label="revise:plato", schema=PLAN_SCHEMA),
+                lambda: agent(_revise(json.dumps(pl_a), json.dumps(pl_p), cr_p),
+                              agent="planner", model=ARISTOTLE,
+                              label="revise:aristotle", schema=PLAN_SCHEMA)])
+            plan = agent(_synth(
+                "PLATO REVISED PLAN:\n" + json.dumps(rv_p) +
+                "\n\nARISTOTLE REVISED PLAN:\n" + json.dumps(rv_a) +
+                "\n\nCRITIQUE BY PLATO (of aristotle):\n" + cr_p +
+                "\n\nCRITIQUE BY ARISTOTLE (of plato):\n" + cr_a),
+                agent="planner", model=PLATO, label="synthesis", schema=PLAN_SCHEMA)
+        else:                                    # duel: 5 calls, straight to synthesis
+            plan = agent(_synth(
+                "PLATO PLAN:\n" + json.dumps(pl_p) +
+                "\n\nARISTOTLE PLAN:\n" + json.dumps(pl_a) +
+                "\n\nCRITIQUE BY PLATO (of aristotle):\n" + cr_p +
+                "\n\nCRITIQUE BY ARISTOTLE (of plato):\n" + cr_a),
+                agent="planner", model=PLATO, label="synthesis", schema=PLAN_SCHEMA)
+
 for p in plan["pieces"]:
     p["status"], p["summary"] = "pending", ""
 
@@ -217,9 +353,13 @@ S = {
     "progress_log": [], "review_rounds": [], "findings": [],
     "unresolved": [], "lessons": "", "ponytail_debt": [],
 }
+if ULTRA:
+    S["meta"]["ultra"] = {"topology": TOPOLOGY, "plato": PLATO, "aristotle": ARISTOTLE}
+_gc = {"crossreview": 3, "duel": 5, "debate": 7}.get(TOPOLOGY, 0) if ULTRA else 0
 plog(S, "plan", f"plan ready: {plan['mode']}"
      + (f"/overlap={plan.get('overlap')}" if plan["mode"] == "parallel" else "")
-     + f", {len(plan['pieces'])} piece(s)")
+     + f", {len(plan['pieces'])} piece(s)"
+     + (f" [ultra:{TOPOLOGY}, {_gc} genius calls]" if ULTRA else ""))
 print(json.dumps({"dashboard": PLAN_PATH, "plan": plan}, indent=2))
 ```
 
@@ -227,7 +367,10 @@ print(json.dumps({"dashboard": PLAN_PATH, "plan": plan}, indent=2))
 
 1. **Open the dashboard**: `xdg-open .planning/<slug>/plan.html` (macOS: `open`).
    It live-refreshes; the user can keep it open for the whole run.
-2. **Present the plan** in chat (shape, pieces, lenses, notes) and iterate:
+2. **Present the plan** in chat (shape, pieces, lenses, notes) and iterate. In an
+   ultra run, also tell the user the topology and the rough genius spend — the
+   `S["meta"]["ultra"]["topology"]` and its call count (crossreview 3 / duel 5 /
+   debate 7 genius calls) — so they know what the two planners cost:
    - User gives feedback → apply it: either re-run the planner with the feedback
      folded in (re-assign `S["plan"]`, reset piece statuses, `save_state(S)`), or
      patch directly in a tiny eval (e.g. merge/edit/drop pieces), then re-present.
@@ -366,6 +509,10 @@ def consult(p, stuck):
     # CONSULT mode); mechanical failures -> the DEBUGGER. Both at depth 1 here, so
     # they keep full tools + their own research subagents at depth 2.
     if stuck["kind"] == "design":
+        # Fresh eyes: in an ultra run the CHALLENGER (aristotle), not the plan's
+        # author, re-adjudicates a design escalation — the model that red-teamed
+        # the plan is best placed to reopen it. Legacy runs use the planner chain.
+        u = S["meta"].get("ultra")
         return agent(
             "CONSULT mode. You are the architect of this plan; an implementer is "
             "stuck on a design question. Adjudicate — clarify intent, adjust the "
@@ -373,7 +520,8 @@ def consult(p, stuck):
             f"new plan.\n\nPLAN:\n{json.dumps(plan)}\n\nPIECE {p['id']}:\n"
             f"{p['description']}\n\nTRIED:\n{stuck['tried']}\n\nQUESTION:\n"
             f"{stuck['question']}",
-            agent="planner", label=f"consult:{p['id']}")
+            agent="planner", model=u["aristotle"] if u else None,
+            label=f"consult:{p['id']}")
     return agent(
         "A worker is stuck on a hard failure. Find the ROOT CAUSE and return the "
         f"exact fix + how to verify.\n\nPIECE {p['id']}:\n{p['description']}\n\n"

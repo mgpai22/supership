@@ -14,6 +14,9 @@ every run human-readable, durable, and resumable.
                       the plan in a live dashboard -> build -> review loop -> consolidate
 /shipit <task>        autonomous: same pipeline, no interview, no gate — fire & forget
 /supership resume     re-enter any interrupted run where it left off
+/ultraship [topo] <task>    interactive, but with TWO genius planners (plato + aristotle)
+                            debating the plan first — topo = crossreview|duel|debate
+/ultrashipit [topo] <task>  autonomous dual-genius: same two-planner front end, no gate
 ```
 
 Generate a sample dashboard: `python3 scripts/demo.py` -> `examples/demo-plan.html`.
@@ -24,6 +27,8 @@ Generate a sample dashboard: `python3 scripts/demo.py` -> `examples/demo-plan.ht
 |---|---|
 | `omp/commands/supership.md` | The pipeline (interactive). Three eval-cell blocks: SHARED HELPERS (state I/O + schemas), CELL 1 (plan -> dashboard), CELL 2 (build -> review -> consolidate, resume-safe). |
 | `omp/commands/shipit.md` | Thin auto-mode wrapper (it executes supership.md with `MODE="auto"`). |
+| `omp/commands/ultraship.md` | Thin ultra wrapper: supership.md with `ULTRA=True` (two genius planners debate the plan) + a topology word. Interactive. |
+| `omp/commands/ultrashipit.md` | Autonomous ultra wrapper: `ULTRA=True` + `MODE="auto"` (dual-genius plan, no interview/gate). |
 | `omp/templates/supership-plan.html` | The dashboard template with dark, dependency-free, `file://`-safe, XSS-safe (textContent-only render). |
 | `omp/agents/planner.md` | GENIUS architect. Three modes: CLARIFY (dependency-ordered question tree, each with a recommended answer), PLAN (structured plan), CONSULT (adjudicate a stuck implementer's design question). |
 | `omp/agents/task.md` | Mechanical worker. Offloads research to scouts; returns a `stuck` signal instead of thrashing. |
@@ -145,6 +150,63 @@ anthropic pool entry usable.
                                   ponytail-debt harvested; omp per-repo memory
                                   carries lessons into future sessions
 ```
+
+## Ultra variant (`/ultraship`, `/ultrashipit`)
+
+The base pipeline plans with a single genius. The **ultra** variant runs the
+**exact same pipeline** but replaces that one planner with **two** genius seats
+that debate the plan before anything is built — then hands the agreed plan to the
+unchanged execute → review → consolidate machinery. Use it when the plan is the
+risky part (ambiguous architecture, big blast radius, one-shot migrations); skip
+it when the work is mechanical.
+
+Two model-role seats you configure (see `config/`):
+
+- **`plato`** — chief architect and **final consolidator**; always owns THE plan.
+- **`aristotle`** — the **challenger**; red-teams, never rubber-stamps.
+
+Three topologies (first word of the command picks one; default `duel`):
+
+| Topology | Genius calls | Flow | Use when |
+|---|---|---|---|
+| `crossreview` | 3 | plato plans → aristotle red-teams → plato revises | cheapest sanity check on a single strong plan |
+| `duel` | 5 | both plan **blind** in parallel → each red-teams the rival → plato synthesizes | you want two genuinely independent takes reconciled |
+| `debate` | 7 | duel + one revision round (each revises its own plan given the rival + its critique) → plato synthesizes | highest-stakes plans worth a full argue-and-refine |
+
+Synthesis is **single-owner, never a committee merge** — plato adopts the
+strongest elements and records the adopted/rejected tradeoffs in the plan `notes`.
+`debate` is hard-capped at exactly one revision round (no convergence loops).
+
+`/ultraship <topo> <task>` is interactive (clarify + approval gate, and the plan
+presentation tells you the topology and its genius spend); `/ultrashipit <topo>
+<task>` is autonomous (no interview, no gate). Both accept `resume`.
+
+**Fresh-eyes consults:** in an ultra run, a `design` escalation from a stuck
+builder is re-adjudicated by the **challenger** (aristotle), not the plan's
+author — the model that red-teamed the plan is best placed to reopen it. `bug`
+escalations still go to `deep-debugger`.
+
+**Config the seats** (merge into `modelRoles`, e.g. via `./install.sh --config`):
+
+```yaml
+modelRoles:
+  plato:                              # chief architect / consolidator
+    - anthropic/claude-fable-5:high
+    - anthropic/claude-opus-4-8:max
+  aristotle:                          # challenger (same model as plato is legal)
+    - openai-codex/gpt-5.6-sol:xhigh
+    - openai-codex/gpt-5.6-sol-pro:xhigh
+```
+
+If either seat is unset, ultra **fails loud** — Cell 1 asserts both are configured
+and non-empty and refuses to silently degrade to a single genius.
+
+**Why the pipeline resolves the chains itself:** omp's `pi/<role>` aliases only
+cover **built-in** role names (through omp ≤ 16.3.15), so `model="pi/plato"` for a
+custom role passes through unresolved and omp *silently* spawns an undefined-model
+session. So Cell 1 reads `omp config get modelRoles --json` itself, normalizes each
+chain to a comma-joined fallback string, and passes it via `model=` (a call-site
+`model=` overrides the planner agent's frontmatter chain).
 
 ## License
 
