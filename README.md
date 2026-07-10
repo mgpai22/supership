@@ -88,6 +88,15 @@ ladder inline, and the consolidate step harvests `// ponytail:` debt markers;
 installing ponytail globally reinforces the same discipline in ordinary
 (non-pipeline) sessions.
 
+## Load balancing across subscriptions
+
+omp's `modelRoles` chains are fallback-only (first resolvable model always
+wins — no native rotation, and provider in-flight caps queue rather than
+spill over). So Cell 2 rotates explicitly: `TASK_MODEL_POOL` round-robins
+plain `task` builders and fixers across models/subscriptions via
+`agent(model=...)`, deterministically by piece order (resume-safe). Weight by
+repeating an entry; set `[]` to disable. Genius agents never pool.
+
 ## How the pipeline works
 
 ```

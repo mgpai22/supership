@@ -258,6 +258,19 @@ save_state(S)
 MAX_ROUNDS = 3                   # hard cap on review->fix->reverify iterations
 BUDGET_RESERVE = 60_000          # stop the loop if a hard budget dips below this
 
+# Load-balance plain "task" spawns across subscriptions. omp role chains are
+# fallback-only (first resolvable ALWAYS wins — no native rotation), so the
+# pipeline rotates explicitly via agent(model=...). Round-robin by piece order
+# (deterministic + resume-safe); weight by repeating an entry; [] disables
+# (role chain decides). Explicit agents (planner/deep-debugger) never pool.
+TASK_MODEL_POOL = ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"]
+PIECE_IDX = {p["id"]: i for i, p in enumerate(plan["pieces"])}
+def pool_model(key, idx=None):
+    if not TASK_MODEL_POOL: return None
+    import zlib
+    i = idx if idx is not None else zlib.crc32(str(key).encode())
+    return TASK_MODEL_POOL[i % len(TASK_MODEL_POOL)]
+
 LEAN = ("\n\nBuild LEAN (ponytail ladder): does this need to exist (YAGNI)? "
         "reuse what's already in the codebase → stdlib → native platform → an "
         "already-installed dep → one line → only then minimal new code. Smallest "
@@ -338,13 +351,15 @@ def run_build(p):
     # retry, then surface. Returns a record; NO shared-state writes (thread-safe
     # inside parallel() waves — the driver records results).
     ag = p.get("agent") or "task"
+    mdl = pool_model(p["id"], PIECE_IDX.get(p["id"])) if ag == "task" else None
+    if mdl: log(f"{p['id']} routed to {mdl}")
     try:
-        r = agent(build_prompt(p), agent=ag, label=f"build:{p['id']}",
+        r = agent(build_prompt(p), agent=ag, model=mdl, label=f"build:{p['id']}",
                   schema=BUILD_SCHEMA)
         if r["status"] == "stuck" and r.get("stuck"):
             log(f"{p['id']} stuck ({r['stuck']['kind']}) — consulting")
             guidance = consult(p, r["stuck"])
-            r = agent(build_prompt(p, guidance), agent=ag,
+            r = agent(build_prompt(p, guidance), agent=ag, model=mdl,
                       label=f"build:{p['id']}:retry", schema=BUILD_SCHEMA)
         ok = r["status"] == "done"
         return {"id": p["id"], "ok": ok, "status": "done" if ok else "unresolved",
@@ -375,8 +390,10 @@ def safe_isolated(p):
     # forces PATCH mode so node["patch_path"] is always set; apply=False keeps
     # edits in the worktree; reconcile serially in Synthesize (no concurrent-apply race).
     try:
+        ag = p.get("agent") or "task"
         return {"id": p["id"], "ok": True,
-                "node": agent(build_prompt(p), agent=p.get("agent") or "task",
+                "node": agent(build_prompt(p), agent=ag,
+                              model=pool_model(p["id"], PIECE_IDX.get(p["id"])) if ag == "task" else None,
                               label=f"build:{p['id']}", isolated=True,
                               apply=False, merge=False, handle=True)}
     except Exception as e:
@@ -505,7 +522,7 @@ while True:
         try:
             agent(f"Fix these confirmed review findings in {path}. Edit the shared "
                   f"working tree in place; do NOT create new files.\n{body}",
-                  agent="task", label=f"fix:{path}")
+                  agent="task", model=pool_model(path), label=f"fix:{path}")
         except Exception as e:
             log(f"fix failed for {path}: {e}")
     parallel([lambda k=k, v=v: fix_file(k, v) for k, v in by_file.items()])
