@@ -7,5 +7,7 @@
   "advisor": ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh"],
   "designer": ["openai-codex/gpt-5.6-sol:medium", "zai/glm-5.2:high"],
   "plato": ["anthropic/claude-fable-5:high", "anthropic/claude-opus-4-8:max"],
-  "aristotle": ["openai-codex/gpt-5.6-sol:xhigh", "openai-codex/gpt-5.6-sol-pro:xhigh"]
+  "aristotle": ["openai-codex/gpt-5.6-sol:xhigh", "openai-codex/gpt-5.6-sol-pro:xhigh"],
+  "taskpool": ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"],
+  "reviewers": ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"]
 }

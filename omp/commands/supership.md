@@ -148,6 +148,24 @@ def ensure_gitignore():
                 f.write("\n")
             f.write("# supership plan dashboards (delete to commit/push plans)\n.planning/\n")
 
+# ---- config: modelRoles (lazy read; NEVER called at helper-exec time) --------
+def read_model_roles():
+    # Read modelRoles from omp config INSIDE a cell body (needs the eval `tool`
+    # + `json` globals). Fail-OPEN: any error -> {} so callers fall back to
+    # their own defaults. In-session tool.bash returns {"text": <stdout>,
+    # "details": {...}} (raw string only when a tool emits no details, which
+    # bash never does); the CLI `--json` shape is {"key":..., "value": {...}}.
+    try:
+        raw = tool.bash(command="omp config get modelRoles --json")
+        if isinstance(raw, dict):
+            raw = raw.get("text", "")
+        mr = json.loads(raw)
+        if isinstance(mr, dict) and "value" in mr:
+            mr = mr["value"]
+        return mr if isinstance(mr, dict) else {}
+    except Exception:
+        return {}
+
 # ---- SCHEMAS (JSON Schema dialect; descriptions survive) ---------------------
 PLAN_SCHEMA = {
     "type": "object", "additionalProperties": False,
@@ -228,6 +246,17 @@ BUILD_SCHEMA = {
                 "question": {"type": "string", "description": "The precise question to escalate"}}},
     },
 }
+
+VERIFY_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["confirmed", "evidence"],
+    "properties": {
+        "confirmed": {"type": "boolean",
+            "description": "true ONLY with concrete evidence the finding is a real defect; false if it cannot be confirmed (i.e. refuted)"},
+        "evidence": {"type": "string",
+            "description": "file:line + why it is really a defect, or the reason the finding is refuted"},
+    },
+}
 ```
 
 ### CELL 1 body (after the helpers)
@@ -255,14 +284,10 @@ else:
     # unresolved and omp SILENTLY spawns an undefined-model session (the error
     # is discarded). So read the chains from config and pass them as ordered
     # comma-joined fallback strings via model= — a call-site model= beats the
-    # planner agent's own frontmatter chain.
-    # NOTE: in-session tool.bash returns {"text": <stdout>, "details": {...}}
-    # (raw string only when the tool emits no details, which bash always does).
-    _raw = tool.bash(command="omp config get modelRoles --json")
-    if isinstance(_raw, dict):
-        _raw = _raw.get("text", "")
-    _mr = json.loads(_raw)
-    _roles = _mr.get("value", _mr) if isinstance(_mr, dict) and "value" in _mr else _mr
+    # planner agent's own frontmatter chain. The read (+ {"text": ...}/{"value":
+    # ...} unwrap) is factored into the shared read_model_roles() helper; the
+    # LOUD assert stays here (ultra refuses to degrade to one genius).
+    _roles = read_model_roles()
     assert _roles.get("plato") and _roles.get("aristotle"), (
         "ultra needs modelRoles.plato + modelRoles.aristotle configured — "
         "refusing to degrade to a single genius")
@@ -391,6 +416,15 @@ print(json.dumps({"dashboard": PLAN_PATH, "plan": plan}, indent=2))
 Author one eval cell: `SLUG = "..."` + HELPERS + this body. Everything derives
 from the file, so this cell also works cold (resume) with no kernel state.
 
+The review loop is **judge → verify → fix**: diverse reviewers (models from
+`modelRoles.reviewers`) fan out per lens, the judge keeps the real findings, then
+a per-finding **refute-verifier** re-checks each kept finding against the actual
+code before any fixer runs — the judge rules on finding *text*, so this catches
+plausible-but-wrong findings the judge can't. Verification is fail-open (a
+verifier error keeps the finding) and gated by `VERIFY_FINDINGS`; only *confirmed*
+findings reach fixers and `S["findings"]`. A round with nothing confirmed (all
+refuted) counts as clean.
+
 ```py
 S = load_state()
 assert S["approval"]["state"] in ("approved", "auto"), "plan not approved — aborting"
@@ -399,16 +433,22 @@ S["meta"]["status"] = "building"
 save_state(S)
 
 MAX_ROUNDS = 3                   # hard cap on review->fix->reverify iterations
+VERIFY_FINDINGS = True           # gate fixers behind refute-verifiers (blind-judge fix)
 BUDGET_RESERVE = 60_000          # stop the loop if a hard budget dips below this
+
+_cfg_roles = read_model_roles()  # one config read for the whole cell (pool + reviewers)
 
 # Load-balance plain "task" spawns across subscriptions. omp role chains are
 # fallback-only (no rotation; in-flight caps queue, not spill), so the pipeline
 # routes explicitly via agent(model=...): deterministic round-robin by piece
 # order, made SUBSCRIPTION-AWARE via omp's own durable usage ledger
 # (~/.omp/agent/agent.db: usage_history + auth_credential_blocks — the same
-# data `omp usage` shows). Weight by repeating entries; [] disables.
-# Explicit agents (planner/deep-debugger) never pool.
-TASK_MODEL_POOL = ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"]
+# data `omp usage` shows). Pool entries are single model patterns, rotated +
+# health-checked per provider; weight by repeating an entry. Configured via
+# modelRoles.taskpool; an explicit taskpool:[] DISABLES pooling (model=None),
+# while an ABSENT key yields the default pair. Explicit agents never pool.
+TASK_MODEL_POOL = list(_cfg_roles["taskpool"] if "taskpool" in _cfg_roles
+                       else ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"])
 POOL_FULL = 0.95          # used_fraction at/above which a subscription is "full"
 POOL_SKIP = {}            # provider -> unix ts to skip until (reactive marks)
 LIMIT_ERR = ("usage_limit_reached", "usage limit", "resource_exhausted",
@@ -680,8 +720,12 @@ def review_specs():
     # DIVERSE MODELS on ONE clean reviewer: deep-reviewer has no native output
     # schema, so the FINDINGS_SCHEMA call-site override applies cleanly (avoids
     # oh-my-pi #3926 with the bundled `reviewer`). Diversity via model= per lens.
-    review_models = ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.5:high"]
-    return [{"agent": "deep-reviewer", "model": review_models[i % 2], "lens": lens}
+    # `reviewers` is a DIVERSITY SET (entries alternate across lenses), NOT a
+    # fallback chain — though each entry MAY itself be a comma-joined chain. An
+    # empty diversity set is a misconfig, not a feature: fall back to the default.
+    review_models = list(_cfg_roles.get("reviewers")
+                         or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
+    return [{"agent": "deep-reviewer", "model": review_models[i % len(review_models)], "lens": lens}
             for i, lens in enumerate(lenses)]
 
 def run_reviewer(s):
@@ -729,10 +773,32 @@ while True:
     keep_ids = {d["id"] for d in judged["decisions"] if d["keep"]}
     real = [f for f in findings
             if f["id"] in keep_ids and f["priority"] <= 1 and f["confidence"] >= 0.6]
+    kept_n = len(real)   # judge-kept count, BEFORE the refute-verify gate
+    # VERIFY (blind-judge fix): the judge rules on the finding TEXT, never the
+    # code — so a plausible-but-wrong finding survives. Gate the fixers behind a
+    # per-finding verifier that tries to REFUTE it against the real code; only
+    # confirmed findings reach fixers / S["findings"]. Fail-OPEN (infra noise
+    # must never silently drop a judge-kept finding). Zero-kept rounds spawn none.
+    if VERIFY_FINDINGS and real:
+        def verify_finding(f):
+            try:
+                v = agent("Try to REFUTE this code-review finding against the actual code. "
+                          "Read the files; run cheap checks if useful. confirmed=true ONLY "
+                          "with concrete evidence (file:line + why it is really a defect). "
+                          "If you cannot confirm with evidence, it is refuted (confirmed=false)."
+                          "\n\nTASK CONTEXT:\n" + TASK + "\n\nFINDING:\n" + json.dumps(f),
+                          agent="task", model=pool_model(f["id"]), label=f"verify:{f['id']}",
+                          schema=VERIFY_SCHEMA)
+                return {**f, "verified": v["confirmed"], "evidence": v["evidence"]}
+            except Exception as e:
+                # fail-OPEN: infra noise must never silently drop a judge-kept finding
+                return {**f, "verified": True, "evidence": f"verifier error (kept): {e}"}
+        real = [f for f in parallel([lambda f=f: verify_finding(f) for f in real]) if f["verified"]]
     S["review_rounds"].append({"round": round_n, "found": len(findings),
-                               "kept": len(real), "verdicts": judged["verdicts"]})
+                               "kept": kept_n, "confirmed": len(real),
+                               "verdicts": judged["verdicts"]})
     S["findings"].extend(real)
-    plog(S, "review", f"round {round_n}: {len(findings)} found, {len(real)} kept")
+    plog(S, "review", f"round {round_n}: {len(findings)} found, {kept_n} kept, {len(real)} confirmed")
     if not real:
         break
     if round_n >= MAX_ROUNDS:
@@ -775,7 +841,10 @@ print(json.dumps({
              "pieces": {p["id"]: p["status"] for p in plan["pieces"]}},
     "review_rounds": S["review_rounds"],
     "unresolved": S["unresolved"],
-    "clean": bool(S["review_rounds"]) and S["review_rounds"][-1]["kept"] == 0
+    # clean = last round left nothing CONFIRMED (a round whose findings were all
+    # refuted breaks as clean too); no-findings rounds lack "confirmed" -> kept=0.
+    "clean": bool(S["review_rounds"])
+             and S["review_rounds"][-1].get("confirmed", S["review_rounds"][-1]["kept"]) == 0
              and not S["unresolved"],
 }, indent=2))
 ```

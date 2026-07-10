@@ -47,6 +47,21 @@ modelRoles:
   aristotle:
     - openai-codex/gpt-5.6-sol:xhigh
     - openai-codex/gpt-5.6-sol-pro:xhigh
+  # ┌─ These two are NOT fallback chains — read them differently:
+  # │  • taskpool = a POOL. Cell 2 round-robins + health-checks each entry per
+  # │    provider to load-balance plain `task` builders/fixers/verifiers across
+  # │    subscriptions. Entries are single model patterns; weight by REPEATING an
+  # │    entry; taskpool:[] DISABLES pooling; omitting the key uses the default.
+  # │  • reviewers = a DIVERSITY SET. Entries ALTERNATE across the review lenses
+  # │    (model[i % len]) so different lenses get different eyes. An entry MAY be
+  # │    a comma-joined chain, but the LIST is not a fallback chain.
+  # └────────────────────────────────────────────────────────────────────────
+  taskpool:
+    - openai-codex/gpt-5.6-terra:medium
+    - anthropic/claude-sonnet-5:high
+  reviewers:
+    - anthropic/claude-opus-4-8:max
+    - openai-codex/gpt-5.6-sol:high
 
 task:
   # Default is 2, which tool-strips deep-debugger when a task agent spawns it
