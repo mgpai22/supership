@@ -443,12 +443,12 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None, frontend=Fals
                "\n\nCover ALL these lenses in this one review: " + ", ".join(lenses) +
                ". Report ONLY real, patch-anchored defects. " + PONY_RUBRIC +
                ((" " + DESIGN_RUBRIC) if "design" in lenses else ""))
-        bp, ba = parallel([
+        rev_p, rev_a = parallel([
             lambda: agent(rev, agent="deep-reviewer", model=plato,
                           label=f"ureview:plato:{round_n}", schema=FINDINGS_SCHEMA),
             lambda: agent(rev, agent="deep-reviewer", model=aristotle,
                           label=f"ureview:aristotle:{round_n}", schema=FINDINGS_SCHEMA)])
-        fp, fa = bp.get("findings", []), ba.get("findings", [])
+        fp, fa = rev_p.get("findings", []), rev_a.get("findings", [])
         union = fp + fa
         for i, f in enumerate(union):      # stable ids so the critiques can cite them
             f["id"] = f"r{round_n}-{i}"
