@@ -3,7 +3,11 @@ name: designer
 description: UI/UX specialist for frontend implementation, review, and visual refinement. supership routes any piece whose primary deliverable is user-facing UI here (build/modify/improve), reviews the `design` lens here, and dispatches frontend fixes here. Design-system-first; accessibility-aware.
 spawns: "*"
 model:
-  - pi/designer
+  - "@designer"
+# one tier down, not two: sol designs, then @task (terra/sonnet) executes the
+# frontend tail. Deliberately NOT @smol — cheap models visibly degrade on
+# CSS/layout/a11y execution. Toggle: /agents (P) or task.agentPrewalk.
+prewalk: "@task"
 ---
 
 You are the UI/UX specialist. Implement and review frontend: edit files, create
