@@ -17,9 +17,9 @@ Both are model-role seats you configure in `modelRoles`.
 
 ## Why the pipeline resolves the chains itself
 
-omp's `pi/<role>` alias resolver is hard-gated to built-in role names (verified through omp 16.3.15). A custom role like `pi/plato` passes through unresolved, and omp then *silently* spawns an undefined-model session, discarding the error.
+On omp ≤ 16.3.15 the `pi/<role>` alias resolver was hard-gated to built-in role names: a custom role like `pi/plato` passed through unresolved, and omp then *silently* spawned an undefined-model session, discarding the error. omp ≥ 17 lifts that gate — a custom `@plato` resolves for any configured `modelRoles` key.
 
-So the pipeline does not rely on the alias. Cell 1 reads `modelRoles` from config itself, normalizes each chain to a comma-joined fallback string, and passes it via `model=`. A call-site `model=` overrides the planner agent's own frontmatter chain, so the geniuses you configured are the ones that run.
+The pipeline still does not rely on the alias. Cell 1 reads `modelRoles` from config itself for two reasons: an unconfigured `@plato` resolves to nothing *without an error at the call site*, whereas the config read asserts both seats loudly; and a self-resolved comma-joined chain passed via `model=` behaves identically on every omp version. A call-site `model=` overrides the planner agent's own frontmatter chain, so the geniuses you configured are the ones that run. (Note: eval's `completion()` helper is separate — its `model` param is a closed `smol|default|slow` enum, so custom roles never work there.)
 
 ## Plan-time freezing
 

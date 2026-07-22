@@ -14,7 +14,7 @@ The `planner` agent is a genius architect with three modes. The pipeline picks t
 - **PLAN.** The default. Return a concrete execution plan matching the schema below.
 - **CONSULT.** An implementer is stuck on a design question mid-build. The planner is handed the plan, the piece, what was tried, and the precise question, and it adjudicates. It clarifies intent, adjusts the piece, or descopes it, and returns actionable guidance, not a new plan.
 
-The planner never greps or browses itself. It offloads all fact-finding to cheap subagents (`david-research` for external docs and web, `explore` for the local codebase, `librarian` for library and API source) and reasons over their summaries.
+The planner never greps or browses itself. It offloads all fact-finding to cheap subagents (`david-research` for external docs and web, `scout` for the local codebase, `librarian` for library and API source) and reasons over their summaries.
 
 ## Plan schema
 

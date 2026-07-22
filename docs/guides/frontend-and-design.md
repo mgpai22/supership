@@ -6,7 +6,7 @@ description: The Designer Agent and Routing
 
 # Frontend and design
 
-Anything user-facing routes through the `designer` agent, omp's UI/UX specialist (model `pi/designer`), instead of the generic `task` worker. The designer is design-system-first and accessibility-aware, and it handles frontend end to end: build, review, and fix. There is no new config; this reuses the existing `modelRoles.designer` chain.
+Anything user-facing routes through the `designer` agent, omp's UI/UX specialist (model `@designer`), instead of the generic `task` worker. The designer is design-system-first and accessibility-aware, and it handles frontend end to end: build, review, and fix. There is no new config; this reuses the existing `modelRoles.designer` chain.
 
 ## Build
 

@@ -13,12 +13,12 @@ supership relies on a set of `modelRoles` plus a few `task`, `compaction`, and `
 ```type-table
 # modelRoles
 default | chain | (main agent) | Fallback chain for the main agent.
-smol | chain | (scouts) | Cheap scouts: david-research, explore, librarian.
+smol | chain | (scouts) | Cheap scouts: david-research, scout, librarian.
 slow | chain | (reviewer tier) | The reviewer tier and the review judge.
 plan | chain | (genius) | The genius chain for planner and deep-debugger.
 task | chain | (workers) | Fallback chain for the mechanical task worker.
 advisor | chain | | Advisor genius chain.
-designer | chain | (pi/designer) | The designer agent's chain for frontend build, review, and fix.
+designer | chain | (@designer) | The designer agent's chain for frontend build, review, and fix.
 plato | chain | (loud-fail if unset) | Ultra seat: chief architect and final consolidator.
 aristotle | chain | (loud-fail if unset) | Ultra seat: challenger.
 taskpool | pool | default pair | Load-balancing pool for task builders, fixers, and verifiers.

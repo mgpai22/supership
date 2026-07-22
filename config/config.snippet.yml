@@ -12,7 +12,7 @@ modelRoles:
   default:
     - openai-codex/gpt-5.6-sol:high
     - anthropic/claude-opus-4-8:high
-  # cheap scouts (david-research, explore, librarian, sonic)
+  # cheap scouts (david-research, scout, librarian, sonic)
   # (cost-ordered: luna $1/$6, haiku $1/$5, flash $1.5/$9 — flash is the
   #  priciest of the three despite the name)
   smol:
