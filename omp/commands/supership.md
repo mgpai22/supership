@@ -51,13 +51,19 @@ chains are frozen into the run state at plan time, so editing `modelRoles`
 mid-run does not retarget an in-flight or resumed run (plan-time identity is
 deliberate).
 
-**Why the pipeline reads the chains itself:** omp's `pi/<role>` alias resolver is
-hard-gated to built-in role names (≤ 16.3.15), so `model="pi/plato"` passes
-through unresolved and omp *silently* spawns an undefined-model session. Cell 1
-therefore reads `omp config get modelRoles --json` itself, asserts `plato` +
+**Why the pipeline reads the chains itself:** on omp ≤ 16.3.15 the `pi/<role>`
+alias resolver was hard-gated to built-in role names, so `model="pi/plato"` passed
+through unresolved and omp *silently* spawned an undefined-model session. omp ≥ 17
+lifts that gate — a custom `@plato` resolves through `agent()`/frontmatter/
+`task.agentModelOverrides` (verified in model-resolver.ts: `getModelRoleAlias`
+accepts any role with a configured `modelRoles` entry). Cell 1 still reads
+`omp config get modelRoles --json` itself because (a) it asserts `plato` +
 `aristotle` are configured and non-empty (**loud fail** — it refuses to degrade to
-one genius), normalizes each chain to a comma-joined fallback string, and passes
-it via `model=` (a call-site `model=` beats the planner's frontmatter chain).
+one genius; `@plato` with no entry resolves to nothing without an error at the
+call site), and (b) the self-resolved comma-joined chain works identically on
+every omp version. It passes the chain via `model=` (a call-site `model=` beats
+the planner's frontmatter chain). Note eval's `completion()` is different: its
+`model` param is a closed `smol|default|slow` enum — custom roles never work there.
 
 **Fresh-eyes consult:** in an ultra run a `design` escalation is re-adjudicated by
 the *challenger* (aristotle), not the plan's author — see `consult()` in Cell 2.
@@ -398,7 +404,7 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None, frontend=Fals
         # SET (entries alternate across lenses), NOT a fallback chain; empty = misconfig.
         review_models = list(cfg_roles.get("reviewers")
                              or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
-        # The `design` lens goes to the DESIGNER agent (pi/designer), not deep-reviewer;
+        # The `design` lens goes to the DESIGNER agent (@designer), not deep-reviewer;
         # it doesn't consume a reviewer-model slot (keeps the diversity alternation stable).
         specs, j = [], 0
         for lens in lenses:
@@ -595,7 +601,7 @@ ensure_gitignore()
 # gets the SAME task framing; only the model differs).
 PLAN_PROMPT = (
     "Produce a concrete execution plan for the task below. Investigate ONLY via "
-    "your cheap subagents (explore/david-research/librarian) — do not grep or "
+    "your cheap subagents (scout/david-research/librarian) — do not grep or "
     "browse yourself. Decide sequential-vs-parallel honestly; most work is "
     "sequential (one implementer). If parallel, set overlap=true only when the "
     "pieces may edit the SAME files. Set each piece's `agent`: use `designer` for "
@@ -616,12 +622,14 @@ if not ULTRA:
     plan = agent(PLAN_PROMPT, agent="planner", label="plan", schema=PLAN_SCHEMA)
 else:
     # --- ultra preflight: resolve the two genius chains OURSELVES ------------
-    # omp's pi/<role> alias resolver is hard-gated to BUILT-IN role names
-    # (verified <=16.3.15): a custom role like pi/plato passes through
-    # unresolved and omp SILENTLY spawns an undefined-model session (the error
-    # is discarded). So read the chains from config and pass them as ordered
-    # comma-joined fallback strings via model= — a call-site model= beats the
-    # planner agent's own frontmatter chain. The read (+ {"text": ...}/{"value":
+    # omp <=16.3.15 hard-gated pi/<role> aliases to BUILT-IN role names (a
+    # custom pi/plato silently spawned an undefined-model session). omp >=17
+    # lifts the gate — "@plato" resolves via getModelRoleAlias for ANY
+    # configured modelRoles key — but we still self-resolve: an unconfigured
+    # "@plato" resolves to NOTHING without a call-site error, whereas reading
+    # config lets us assert both seats LOUDLY, and a comma-joined chain via
+    # model= is version-independent (call-site model= beats the planner
+    # agent's own frontmatter chain). The read (+ {"text": ...}/{"value":
     # ...} unwrap) is factored into the shared read_model_roles() helper; the
     # LOUD assert stays here (ultra refuses to degrade to one genius).
     _roles = read_model_roles()
@@ -773,7 +781,7 @@ normal runs are unaffected.
 
 **Frontend → the `designer` agent.** Build routing is the planner's call: it tags
 any UI piece `agent="designer"` (see `PLAN_SCHEMA`), which the build wave dispatches
-to the designer (`model=None` → `pi/designer`; no pooling). Review/fix routing is
+to the designer (`model=None` → `@designer`; no pooling). Review/fix routing is
 mechanical via `is_frontend(path)`: when frontend changed, `run_review_loop` adds a
 `design` lens reviewed by the designer (normal) or folds the design rubric into the
 duel (ultra), and any frontend file's fixes go to the designer instead of the task
@@ -1129,9 +1137,10 @@ also retrievable with the eval `output("<job id>")` helper; check `/jobs`).
    artifact) and continue the pipeline from that exact point. Respawning burns
    the money already spent and orphans a live genius job.
 2. **NEVER re-route planning/consult/debug to a generic worker as a "faster
-   fallback".** The task tool's `role=` field is a display persona, NOT an agent
-   selector — a task item without `agent="planner"` runs on the generic task
-   worker (task-role model), silently swapping the genius brain for a cheap one.
+   fallback".** The only agent selector on a task item is `agent=` (omp ≥17
+   removed the old `role` field outright; `name` is just a registry id) — a task
+   item without `agent="planner"` runs on the generic task worker (task-role
+   model), silently swapping the genius brain for a cheap one.
    If you must use the task tool instead of eval, pass `agent=` explicitly.
    If the planner genuinely cannot run, STOP and tell the user — never downgrade.
 3. Repeated interrupts are an environment problem to surface to the user, not to
@@ -1159,7 +1168,8 @@ is complete on disk. `run_build` salvages that case automatically
   `deep-debugger`) are for planning, consults, and hard diagnosis — never grunt work.
 - **Agent selection is an invariant, not a preference:** plan/consult → `planner`,
   hard diagnosis → `deep-debugger`, review → `deep-reviewer` — always via an
-  explicit `agent=`. A `role=` string alone NEVER substitutes for `agent=`.
+  explicit `agent=`. Persona text in the prompt NEVER substitutes for `agent=`
+  (the task tool's old `role=` field no longer exists in omp ≥17).
 - **Repo-vendored agents are first-class piece owners.** `.omp/agents/*.md` is
   auto-discovered at plan time (`project_agents()`), added to the plan schema's
   agent enum, and listed in the plan prompt so the planner assigns pieces to a

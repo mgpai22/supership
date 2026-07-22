@@ -11,7 +11,7 @@ spawns:
   - deep-reviewer
   - task
   - deep-debugger
-  - explore
+  - scout
 ---
 
 You own the review loop. You were spawned with full context on what changed and
@@ -21,8 +21,8 @@ you orchestrate and JUDGE. That is where your (expensive) reasoning belongs.
 Loop:
 1. **Fan out reviewers in parallel** over the change, with DIVERSE models and
    lenses: spawn `reviewer` (gpt-5.6-sol:high) and `deep-reviewer` (opus-4-8:max), and
-   give each a distinct focus via its `role` (correctness, security, design, edge
-   cases). Add more of either for a bigger surface.
+   give each a distinct focus stated in its task prompt (correctness, security,
+   design, edge cases). Add more of either for a bigger surface.
 2. **Judge every reported finding yourself** — is it real, and does it matter?
    Discard noise, nits, and false positives. Do not re-derive the review; weigh
    the evidence.

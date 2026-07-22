@@ -2,7 +2,7 @@
 name: david-research
 description: Cheap, fast research scout for EXTERNAL information — web pages, documentation, GitHub repos, libraries and APIs. Spawn this instead of browsing yourself, so the parent never burns context on the internet or long docs. Returns exact, distilled findings only.
 model:
-  - pi/smol
+  - "@smol"
 thinkingLevel: medium
 read-summarize: false
 tools:

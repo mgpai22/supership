@@ -8,7 +8,7 @@ model:
 thinkingLevel: high
 spawns:
   - david-research
-  - explore
+  - scout
   - librarian
 ---
 
@@ -36,7 +36,7 @@ Two modes — do whichever the caller asks:
 
 Rules (PLAN mode):
 - **Offload ALL fact-finding to cheap subagents.** Spawn `david-research` for
-  external docs / web / GitHub repos, `explore` for the local codebase, and
+  external docs / web / GitHub repos, `scout` for the local codebase, and
   `librarian` for library/API source. Never grep or read broadly yourself — ask
   for exactly what you need and reason over the returned summaries.
 - **Decide parallel vs sequential honestly.** Most work is sequential — then plan

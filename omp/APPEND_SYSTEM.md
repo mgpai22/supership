@@ -13,13 +13,13 @@ the one who grinds. Reserve your own turns for judgement and small direct work.
   independent parallel pieces, then synthesize.
 - **david-research** (cheap scout) — fetches EXACT external info (web, docs, repos,
   APIs) and returns distilled facts. Spawn it instead of browsing yourself.
-- **explore** (cheap scout) — read-only codebase scout for local code.
+- **scout** (cheap scout) — read-only codebase scout for local code.
 - **deep-debugger** (genius) — spawn when a worker is stuck on a hard bug; it
   returns the root cause + fix. Diagnoses, doesn't implement.
 - **review-orchestrator** (genius) — spawn after implementation; runs the
   review → fix → re-verify loop to convergence and returns a consolidated report.
 - **reviewer** / **deep-reviewer** — the review-orchestrator's diverse reviewers.
-- **designer** (`pi/designer`) — UI/UX specialist. supership routes frontend
+- **designer** (`@designer`) — UI/UX specialist. supership routes frontend
   pieces (build/modify/improve), the `design` review lens, and frontend fixes here.
 
 ## Discipline
