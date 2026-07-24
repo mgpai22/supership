@@ -8,17 +8,17 @@ modelRoles:
   # │  older builds (can1357/oh-my-pi#4492). On < 16.3.7, flatten each list
   # │  to one comma-separated string — identical semantics.
   # └────────────────────────────────────────────────────────────────────────
-  # main agent
+  # main agent. Single entry: runtime failover is handled by retry.fallbackChains
+  # (see the bottom of this file), not by an availability list here.
   default:
-    - openai-codex/gpt-5.6-sol:high
-    - anthropic/claude-opus-4-8:high
+    - anthropic/claude-opus-5:high
   # cheap scouts (david-research, scout, librarian, sonic)
   # (cost-ordered: luna $1/$6, haiku $1/$5, flash $1.5/$9 — flash is the
   #  priciest of the three despite the name)
   smol:
     - openai-codex/gpt-5.6-luna:medium
     - anthropic/claude-haiku-4-5:medium
-    - google-antigravity/gemini-3.5-flash:medium
+    - google-antigravity/gemini-3.6-flash:medium
   # reviewer tier + the review judge
   slow:
     - openai-codex/gpt-5.6-sol:high
@@ -27,11 +27,26 @@ modelRoles:
   plan:
     - anthropic/claude-fable-5:high
     - openai-codex/gpt-5.6-sol:xhigh
-    - anthropic/claude-opus-4-8:max
+    - anthropic/claude-opus-5:max
   # mechanical workers (the task agent)
   task:
     - openai-codex/gpt-5.6-terra:medium
     - anthropic/claude-sonnet-5:high
+  # image/screenshot reading (e.g. verifying computer-use screenshots)
+  vision:
+    - google-antigravity/gemini-3.6-flash:high
+    - openai-codex/gpt-5.6-terra:medium
+  # commit-message generation (`omp commit`) and session titles / memory.
+  # gemini-3.5-flash-lite is NOT on google-antigravity (Google doesn't serve it
+  # there); 3.1-flash-lite is the cheapest lite model that actually resolves.
+  commit:
+    - google-antigravity/gemini-3.1-flash-lite:medium
+    - anthropic/claude-haiku-4-5:medium
+    - openai-codex/gpt-5.6-luna:medium
+  tiny:
+    - google-antigravity/gemini-3.1-flash-lite:medium
+    - anthropic/claude-haiku-4-5:medium
+    - openai-codex/gpt-5.6-luna:medium
   advisor:
     - anthropic/claude-fable-5:high
     - openai-codex/gpt-5.6-sol:xhigh
@@ -43,10 +58,10 @@ modelRoles:
   # is legal (you just lose model diversity in the debate).
   plato:
     - anthropic/claude-fable-5:high
-    - anthropic/claude-opus-4-8:max
+    - anthropic/claude-opus-5:max
   aristotle:
     - openai-codex/gpt-5.6-sol:xhigh
-    - openai-codex/gpt-5.6-sol-pro:xhigh
+    - openai-codex/gpt-5.5:xhigh
   # ┌─ These two are NOT fallback chains — read them differently:
   # │  • taskpool = a POOL. Cell 2 round-robins + health-checks each entry per
   # │    provider to load-balance plain `task` builders/fixers/verifiers across
@@ -60,8 +75,14 @@ modelRoles:
     - openai-codex/gpt-5.6-terra:medium
     - anthropic/claude-sonnet-5:high
   reviewers:
-    - anthropic/claude-opus-4-8:max
+    - anthropic/claude-opus-5:max
     - openai-codex/gpt-5.6-sol:high
+  # Target for the main-session prewalk handoff (see the `prewalk:` block below).
+  # There is no persistent target SETTING in omp — the role is only reached via
+  # `--prewalk-into "@prewalk"`, so a shell wrapper has to pass that flag.
+  prewalk:
+    - anthropic/claude-sonnet-5:medium
+    - openai-codex/gpt-5.6-terra:medium
 
 task:
   # Default is 2, which tool-strips deep-debugger when a task agent spawns it
@@ -87,3 +108,52 @@ compaction:
 
 memory:
   backend: local   # per-repo memory; consolidated ## Lessons get captured
+
+prewalk:
+  # Hands the MAIN session off to a cheap model at the first edit/write after a
+  # todo plan exists. Agent-level prewalk is set per-agent in frontmatter
+  # (task -> "@smol", designer -> "@task"); this key is the session-level switch.
+  enabled: true
+
+# ┌─ NOT APPLIED BY install.sh, and deliberately so: these chains name concrete
+# │  cursor/* and github-copilot/* models that only resolve where those providers
+# │  are logged in. On a machine without them you get a validation warning and a
+# │  dead link per entry. Copy what applies, then VERIFY every entry with
+# │  `omp dry-balance <provider/id> --count 1` (prints "model:" on success).
+# │  Do NOT trust `omp models` — it lists models the registry cannot resolve
+# │  (github-copilot/claude-opus-5 and /gemini-3.6-flash are both in the table
+# │  and both fail to resolve).
+# └──────────────────────────────────────────────────────────────────────────────
+# Ordering rules: (1) same model on another provider FIRST — different billing,
+# so it survives a provider-wide wall while keeping model identity; (2) plentiful
+# provider before scarce — a context-cliff miss costs one failed request and
+# self-corrects, but Copilot premium requests don't reset for 7 days; (3) then
+# same-family downgrade, then cross-family.
+# NOTE: cursor bakes effort INTO the model id (claude-fable-5-max), so cursor/*
+# entries take NO ":effort" suffix. Its high-effort Opus is claude-opus-5-thinking-max.
+# NOTE: `default:` here auto-expands to EVERY modelRole lacking its own chain.
+# retry:
+#   modelFallback: true
+#   fallbackChains:
+#     anthropic/claude-fable-5:
+#       - cursor/claude-fable-5-max
+#       - github-copilot/claude-fable-5-1m:high   # 1M rescue for long sessions
+#       - anthropic/claude-opus-5:max             # Fable has its OWN quota bucket
+#       - cursor/claude-opus-5-thinking-max
+#       - openai-codex/gpt-5.6-sol:xhigh
+#       - zai/glm-5.2:max
+#     anthropic/claude-opus-5:
+#       - cursor/claude-opus-5-thinking-max
+#       - github-copilot/claude-fable-5-1m:high
+#       - openai-codex/gpt-5.6-sol:xhigh
+#       - zai/glm-5.2:max
+#     anthropic/claude-sonnet-5:
+#       - cursor/claude-sonnet-5-high
+#       - github-copilot/claude-sonnet-5-1m:high
+#       - openai-codex/gpt-5.6-terra:medium
+#     anthropic/claude-haiku-4-5:
+#       - openai-codex/gpt-5.6-luna:medium
+#       - google-antigravity/gemini-3.1-flash-lite:medium
+#     default:
+#       - openai-codex/gpt-5.6-sol:high
+#       - anthropic/claude-opus-5:high

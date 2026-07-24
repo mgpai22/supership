@@ -1,13 +1,65 @@
 {
-  "default": ["openai-codex/gpt-5.6-sol:high", "anthropic/claude-opus-4-8:high"],
-  "smol": ["openai-codex/gpt-5.6-luna:medium", "anthropic/claude-haiku-4-5:medium", "google-antigravity/gemini-3.5-flash:medium"],
-  "slow": ["openai-codex/gpt-5.6-sol:high", "anthropic/claude-fable-5:high"],
-  "plan": ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh", "anthropic/claude-opus-4-8:max"],
-  "task": ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"],
-  "advisor": ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh"],
-  "designer": ["openai-codex/gpt-5.6-sol:medium", "zai/glm-5.2:high"],
-  "plato": ["anthropic/claude-fable-5:high", "anthropic/claude-opus-4-8:max"],
-  "aristotle": ["openai-codex/gpt-5.6-sol:xhigh", "openai-codex/gpt-5.6-sol-pro:xhigh"],
-  "taskpool": ["openai-codex/gpt-5.6-terra:medium", "anthropic/claude-sonnet-5:high"],
-  "reviewers": ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"]
+  "default": [
+    "anthropic/claude-opus-5:high"
+  ],
+  "smol": [
+    "openai-codex/gpt-5.6-luna:medium",
+    "anthropic/claude-haiku-4-5:medium",
+    "google-antigravity/gemini-3.6-flash:medium"
+  ],
+  "slow": [
+    "openai-codex/gpt-5.6-sol:high",
+    "anthropic/claude-fable-5:high"
+  ],
+  "plan": [
+    "anthropic/claude-fable-5:high",
+    "openai-codex/gpt-5.6-sol:xhigh",
+    "anthropic/claude-opus-5:max"
+  ],
+  "task": [
+    "openai-codex/gpt-5.6-terra:medium",
+    "anthropic/claude-sonnet-5:high"
+  ],
+  "vision": [
+    "google-antigravity/gemini-3.6-flash:high",
+    "openai-codex/gpt-5.6-terra:medium"
+  ],
+  "commit": [
+    "google-antigravity/gemini-3.1-flash-lite:medium",
+    "anthropic/claude-haiku-4-5:medium",
+    "openai-codex/gpt-5.6-luna:medium"
+  ],
+  "tiny": [
+    "google-antigravity/gemini-3.1-flash-lite:medium",
+    "anthropic/claude-haiku-4-5:medium",
+    "openai-codex/gpt-5.6-luna:medium"
+  ],
+  "advisor": [
+    "anthropic/claude-fable-5:high",
+    "openai-codex/gpt-5.6-sol:xhigh"
+  ],
+  "designer": [
+    "openai-codex/gpt-5.6-sol:medium",
+    "zai/glm-5.2:high"
+  ],
+  "plato": [
+    "anthropic/claude-fable-5:high",
+    "anthropic/claude-opus-5:max"
+  ],
+  "aristotle": [
+    "openai-codex/gpt-5.6-sol:xhigh",
+    "openai-codex/gpt-5.5:xhigh"
+  ],
+  "taskpool": [
+    "openai-codex/gpt-5.6-terra:medium",
+    "anthropic/claude-sonnet-5:high"
+  ],
+  "reviewers": [
+    "anthropic/claude-opus-5:max",
+    "openai-codex/gpt-5.6-sol:high"
+  ],
+  "prewalk": [
+    "anthropic/claude-sonnet-5:medium",
+    "openai-codex/gpt-5.6-terra:medium"
+  ]
 }

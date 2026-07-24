@@ -4,7 +4,7 @@ description: Super-smart, slow ARCHITECT. Use to plan non-trivial multi-step wor
 model:
   - anthropic/claude-fable-5:high      # GENIUS chain
   - openai-codex/gpt-5.6-sol:xhigh
-  - anthropic/claude-opus-4-8:max
+  - anthropic/claude-opus-5:max
 thinkingLevel: high
 spawns:
   - david-research

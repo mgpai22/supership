@@ -403,7 +403,7 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None, frontend=Fals
         # oh-my-pi #3926 with the bundled `reviewer`). `reviewers` is a DIVERSITY
         # SET (entries alternate across lenses), NOT a fallback chain; empty = misconfig.
         review_models = list(cfg_roles.get("reviewers")
-                             or ["anthropic/claude-opus-4-8:max", "openai-codex/gpt-5.6-sol:high"])
+                             or ["anthropic/claude-opus-5:max", "openai-codex/gpt-5.6-sol:high"])
         # The `design` lens goes to the DESIGNER agent (@designer), not deep-reviewer;
         # it doesn't consume a reviewer-model slot (keeps the diversity alternation stable).
         specs, j = [], 0

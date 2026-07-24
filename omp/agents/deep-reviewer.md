@@ -1,8 +1,8 @@
 ---
 name: deep-reviewer
-description: Code-review specialist running on a DIFFERENT model (Opus 4.8 max) for perspective diversity, spawned alongside the standard `reviewer`. Reviews a change for correctness, security, and design defects and returns concrete findings. Read-only — never mutates.
+description: Code-review specialist running on a DIFFERENT model (Fable 5 high) for perspective diversity, spawned alongside the standard `reviewer`. Reviews a change for correctness, security, and design defects and returns concrete findings. Read-only — never mutates.
 model:
-  - anthropic/claude-opus-4-8:max
+  - anthropic/claude-fable-5:high
 thinkingLevel: high
 tools:
   - read
