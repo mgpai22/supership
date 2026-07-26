@@ -4,9 +4,6 @@ description: UI/UX specialist for frontend implementation, review, and visual re
 spawns: "*"
 model:
   - "@designer"
-# one tier down, not two: sol designs, then @task (terra/sonnet) executes the
-# frontend tail. Deliberately NOT @smol — cheap models visibly degrade on
-# CSS/layout/a11y execution. Toggle: /agents (P) or task.agentPrewalk.
 prewalk: "@task"
 ---
 

@@ -3,86 +3,65 @@
 # ./install.sh --config, which applies them via `omp config set`).
 
 modelRoles:
-  # ┌─ Fallback chains as YAML LISTS, in order (first resolvable model wins).
-  # │  REQUIRES omp >= 16.3.7: list values crash the pi/<role> resolver on
-  # │  older builds (can1357/oh-my-pi#4492). On < 16.3.7, flatten each list
-  # │  to one comma-separated string — identical semantics.
+  # ┌─ Values are YAML LISTS in availability order (first resolvable model wins;
+  # │  REQUIRES omp >= 16.3.7, #4492). The `&genius`/`*genius` and `&tiny`/`*tiny`
+  # │  pairs are plain YAML anchors: parse-time expansion, so omp (and this kit's
+  # │  raw config reads) always see concrete lists. Do NOT use `@role` strings as
+  # │  role VALUES — bare `@` breaks YAML parsing entirely, and quoted "@role"
+  # │  values only expand one level in several resolver paths (dry-balance,
+  # │  resolveCliModel). Anchors sidestep both.
   # └────────────────────────────────────────────────────────────────────────
-  # main agent. Single entry: runtime failover is handled by retry.fallbackChains
-  # (see the bottom of this file), not by an availability list here.
-  default:
-    - anthropic/claude-opus-5:high
+  default: anthropic/claude-opus-5:high
   # cheap scouts (david-research, scout, librarian, sonic)
-  # (cost-ordered: luna $1/$6, haiku $1/$5, flash $1.5/$9 — flash is the
-  #  priciest of the three despite the name)
   smol:
     - openai-codex/gpt-5.6-luna:medium
     - anthropic/claude-haiku-4-5:medium
     - google-antigravity/gemini-3.6-flash:medium
-  # reviewer tier + the review judge
-  slow:
-    - openai-codex/gpt-5.6-sol:high
-    - anthropic/claude-fable-5:high
-  # GENIUS chain (planner / deep-debugger): super-smart, slow
-  plan:
+  # GENIUS tier — one anchored list shared by slow/plan/advisor/reviewers.
+  slow: &genius
     - anthropic/claude-fable-5:high
     - openai-codex/gpt-5.6-sol:xhigh
-    - anthropic/claude-opus-5:max
+    - anthropic/claude-opus-5:xhigh
+  plan: *genius
+  advisor: *genius
   # mechanical workers (the task agent)
   task:
-    - openai-codex/gpt-5.6-terra:medium
-    - anthropic/claude-sonnet-5:high
-  # image/screenshot reading (e.g. verifying computer-use screenshots)
+    - openai-codex/gpt-5.6-sol:medium
+    - anthropic/claude-opus-5:medium
   vision:
     - google-antigravity/gemini-3.6-flash:high
     - openai-codex/gpt-5.6-terra:medium
-  # commit-message generation (`omp commit`) and session titles / memory.
-  # gemini-3.5-flash-lite is NOT on google-antigravity (Google doesn't serve it
-  # there); 3.1-flash-lite is the cheapest lite model that actually resolves.
-  commit:
+  # session titles / classifiers; commit msgs share the same cheap chain
+  tiny: &tiny
     - google-antigravity/gemini-3.1-flash-lite:medium
     - anthropic/claude-haiku-4-5:medium
     - openai-codex/gpt-5.6-luna:medium
-  tiny:
-    - google-antigravity/gemini-3.1-flash-lite:medium
-    - anthropic/claude-haiku-4-5:medium
-    - openai-codex/gpt-5.6-luna:medium
-  advisor:
-    - anthropic/claude-fable-5:high
-    - openai-codex/gpt-5.6-sol:xhigh
+  commit: *tiny
   designer:
-    - openai-codex/gpt-5.6-sol:medium
+    - openai-codex/gpt-5.6-sol:high
+    - anthropic/claude-opus-5:high
     - zai/glm-5.2:high
-  # ultra seats (used only by /ultraship + /ultrashipit): plato = chief architect
-  # / final consolidator, aristotle = challenger. Putting the SAME model in both
-  # is legal (you just lose model diversity in the debate).
+  # ultra seats (/ultraship + /ultrashipit): plato = chief architect / final
+  # consolidator, aristotle = challenger.
   plato:
     - anthropic/claude-fable-5:high
-    - anthropic/claude-opus-5:max
   aristotle:
     - openai-codex/gpt-5.6-sol:xhigh
-    - openai-codex/gpt-5.5:xhigh
+    - anthropic/claude-opus-5:max
   # ┌─ These two are NOT fallback chains — read them differently:
   # │  • taskpool = a POOL. Cell 2 round-robins + health-checks each entry per
-  # │    provider to load-balance plain `task` builders/fixers/verifiers across
-  # │    subscriptions. Entries are single model patterns; weight by REPEATING an
-  # │    entry; taskpool:[] DISABLES pooling; omitting the key uses the default.
-  # │  • reviewers = a DIVERSITY SET. Entries ALTERNATE across the review lenses
-  # │    (model[i % len]) so different lenses get different eyes. An entry MAY be
-  # │    a comma-joined chain, but the LIST is not a fallback chain.
+  # │    provider to load-balance plain `task` builders across subscriptions.
+  # │    Entries MUST be concrete provider/model patterns (the kit string-parses
+  # │    them; never use anchors-of-aliases or @role strings here).
+  # │  • reviewers = a DIVERSITY SET. Entries ALTERNATE across review lenses
+  # │    (model[i % len]) so different lenses get different eyes. An anchor to a
+  # │    concrete list (like *genius) is fine — it expands at parse time.
   # └────────────────────────────────────────────────────────────────────────
   taskpool:
-    - openai-codex/gpt-5.6-terra:medium
+    - openai-codex/gpt-5.6-sol:medium
+    - anthropic/claude-opus-5:medium
     - anthropic/claude-sonnet-5:high
-  reviewers:
-    - anthropic/claude-opus-5:max
-    - openai-codex/gpt-5.6-sol:high
-  # Target for the main-session prewalk handoff (see the `prewalk:` block below).
-  # There is no persistent target SETTING in omp — the role is only reached via
-  # `--prewalk-into "@prewalk"`, so a shell wrapper has to pass that flag.
-  prewalk:
-    - anthropic/claude-sonnet-5:medium
-    - openai-codex/gpt-5.6-terra:medium
+  reviewers: *genius
 
 task:
   # Default is 2, which tool-strips deep-debugger when a task agent spawns it
@@ -110,10 +89,14 @@ memory:
   backend: local   # per-repo memory; consolidated ## Lessons get captured
 
 prewalk:
-  # Hands the MAIN session off to a cheap model at the first edit/write after a
-  # todo plan exists. Agent-level prewalk is set per-agent in frontmatter
-  # (task -> "@smol", designer -> "@task"); this key is the session-level switch.
-  enabled: true
+  # Session-level prewalk is OFF: the main session usually orchestrates (spawns
+  # subagents) rather than editing, so the one-way downgrade mostly fires never
+  # (nudge spam, oh-my-pi#6174) or at the wrong time. Subagent prewalk stays on
+  # via frontmatter (task -> "@smol"; designer's "@task" target is currently a
+  # silent no-op when it resolves to the same model id, see oh-my-pi#6659).
+  # Do NOT pass --prewalk-into via a shell wrapper: the flag ARMS prewalk by
+  # itself (overrides this setting) and breaks `omp --no-prewalk`.
+  enabled: false
 
 # ┌─ NOT APPLIED BY install.sh, and deliberately so: these chains name concrete
 # │  cursor/* and github-copilot/* models that only resolve where those providers

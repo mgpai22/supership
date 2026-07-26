@@ -3,7 +3,6 @@ name: opus-reviewer
 description: Correctness/security reviewer PINNED to Claude Opus 5 at max effort for model-diversity review panels. Spawn alongside fable-reviewer and sol-reviewer for independent cross-family reviews of a codebase or change. Read-only — never mutates; yields structured findings. NOT used by /supership's eval review loop (that drives one deep-reviewer with per-call model overrides from modelRoles.reviewers); this agent is for manual panels and review-orchestrator.
 model:
   - anthropic/claude-opus-5:max
-thinkingLevel: max
 tools:
   - read
   - search
@@ -13,6 +12,7 @@ tools:
   - ast_grep
   - yield
 spawns:
+  - david-research
   - scout
 ---
 

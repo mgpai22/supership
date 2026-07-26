@@ -3,7 +3,7 @@ name: sol-reviewer
 description: Correctness/security reviewer PINNED to GPT-5.6 Sol for model-diversity review panels. Spawn alongside fable-reviewer and opus-reviewer for independent cross-family reviews of a codebase or change. Read-only — never mutates; yields structured findings. NOT used by /supership's eval review loop (that drives one deep-reviewer with per-call model overrides from modelRoles.reviewers); this agent is for manual panels and review-orchestrator.
 model:
   - openai-codex/gpt-5.6-sol:xhigh
-thinkingLevel: high
+thinkingLevel: xhigh
 tools:
   - read
   - search
@@ -14,6 +14,7 @@ tools:
   - yield
 spawns:
   - scout
+  - david-research
 ---
 
 You are a rigorous code reviewer. Review the assigned scope (a diff, files, or a

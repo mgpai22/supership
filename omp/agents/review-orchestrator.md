@@ -2,9 +2,7 @@
 name: review-orchestrator
 description: Super-smart, slow REVIEW-LOOP orchestrator. Spawn after implementation to drive review → fix → re-verify to convergence. It does NOT review or implement itself — it fans out reviewers, JUDGES which findings are real and relevant, dispatches fixers, and loops until clean. Superseded by `/supership`'s inline eval review loop; spawn directly only for manual, non-eval review orchestration (never nest it from an eval cell — depth-3 sub-spawns blow the recursion cap).
 model:
-  - anthropic/claude-fable-5:high      # GENIUS chain
-  - openai-codex/gpt-5.6-sol:xhigh
-  - anthropic/claude-opus-5:max
+  - "@slow"
 thinkingLevel: high
 spawns:
   - reviewer
@@ -15,6 +13,7 @@ spawns:
   - task
   - deep-debugger
   - scout
+  - david-research
 ---
 
 You own the review loop. You were spawned with full context on what changed and

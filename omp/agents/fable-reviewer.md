@@ -13,6 +13,7 @@ tools:
   - ast_grep
   - yield
 spawns:
+  - david-research
   - scout
 ---
 

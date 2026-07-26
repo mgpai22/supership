@@ -8,58 +8,58 @@
     "google-antigravity/gemini-3.6-flash:medium"
   ],
   "slow": [
-    "openai-codex/gpt-5.6-sol:high",
-    "anthropic/claude-fable-5:high"
+    "anthropic/claude-fable-5:high",
+    "openai-codex/gpt-5.6-sol:xhigh",
+    "anthropic/claude-opus-5:xhigh"
   ],
   "plan": [
     "anthropic/claude-fable-5:high",
     "openai-codex/gpt-5.6-sol:xhigh",
-    "anthropic/claude-opus-5:max"
+    "anthropic/claude-opus-5:xhigh"
   ],
   "task": [
-    "openai-codex/gpt-5.6-terra:medium",
-    "anthropic/claude-sonnet-5:high"
+    "openai-codex/gpt-5.6-sol:medium",
+    "anthropic/claude-opus-5:medium"
   ],
   "vision": [
     "google-antigravity/gemini-3.6-flash:high",
     "openai-codex/gpt-5.6-terra:medium"
-  ],
-  "commit": [
-    "google-antigravity/gemini-3.1-flash-lite:medium",
-    "anthropic/claude-haiku-4-5:medium",
-    "openai-codex/gpt-5.6-luna:medium"
   ],
   "tiny": [
     "google-antigravity/gemini-3.1-flash-lite:medium",
     "anthropic/claude-haiku-4-5:medium",
     "openai-codex/gpt-5.6-luna:medium"
   ],
+  "commit": [
+    "google-antigravity/gemini-3.1-flash-lite:medium",
+    "anthropic/claude-haiku-4-5:medium",
+    "openai-codex/gpt-5.6-luna:medium"
+  ],
   "advisor": [
     "anthropic/claude-fable-5:high",
-    "openai-codex/gpt-5.6-sol:xhigh"
+    "openai-codex/gpt-5.6-sol:xhigh",
+    "anthropic/claude-opus-5:xhigh"
   ],
   "designer": [
-    "openai-codex/gpt-5.6-sol:medium",
+    "openai-codex/gpt-5.6-sol:high",
+    "anthropic/claude-opus-5:high",
     "zai/glm-5.2:high"
   ],
   "plato": [
-    "anthropic/claude-fable-5:high",
-    "anthropic/claude-opus-5:max"
+    "anthropic/claude-fable-5:high"
   ],
   "aristotle": [
     "openai-codex/gpt-5.6-sol:xhigh",
-    "openai-codex/gpt-5.5:xhigh"
+    "anthropic/claude-opus-5:max"
   ],
   "taskpool": [
-    "openai-codex/gpt-5.6-terra:medium",
+    "openai-codex/gpt-5.6-sol:medium",
+    "anthropic/claude-opus-5:medium",
     "anthropic/claude-sonnet-5:high"
   ],
   "reviewers": [
-    "anthropic/claude-opus-5:max",
-    "openai-codex/gpt-5.6-sol:high"
-  ],
-  "prewalk": [
-    "anthropic/claude-sonnet-5:medium",
-    "openai-codex/gpt-5.6-terra:medium"
+    "anthropic/claude-fable-5:high",
+    "openai-codex/gpt-5.6-sol:xhigh",
+    "anthropic/claude-opus-5:xhigh"
   ]
 }
