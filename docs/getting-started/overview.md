@@ -35,17 +35,17 @@ See [Commands](/docs/getting-started/commands) for the full table.
 ```cards
 # Installation
 Requirements, sharp edges, and the installer.
-/getting-started/installation
+/docs/getting-started/installation
 
 # How it works
 The five stages, the dashboard, and eval cells.
-/pipeline/how-it-works
+/docs/pipeline/how-it-works
 
 # Ultra mode
 Two genius seats debate the plan and the review.
-/ultra/overview
+/docs/ultra/overview
 
 # Standalone review
 Run the review-and-fix loop over local changes.
-/guides/superreview
+/docs/guides/superreview
 ```
