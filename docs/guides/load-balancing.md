@@ -17,7 +17,7 @@ The pool is configured, not a cell constant. It comes from `modelRoles.taskpool`
 - Entries are single model patterns.
 - Weight an entry by repeating it in the list.
 - `taskpool: []` **disables** pooling, so spawns run with `model=None`.
-- Omitting the key falls back to the shipped default pair.
+- Omitting the key falls back to the shipped default trio.
 
 ## Round-robin
 

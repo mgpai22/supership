@@ -10,15 +10,18 @@ The kit ships a roster of global agents. The pipeline spawns them by name via `a
 
 | Agent | Model | Purpose |
 |---|---|---|
-| `planner` | genius chain | Architect. Three modes: CLARIFY (question tree), PLAN (structured plan), CONSULT (adjudicate a stuck builder's design question). Investigates only via cheap subagents; never implements. |
+| `planner` | genius tier (`@plan`) | Architect. Three modes: CLARIFY (question tree), PLAN (structured plan), CONSULT (adjudicate a stuck builder's design question). Investigates only via cheap subagents; never implements. |
 | `task` | `@task` (the task pool) | Mechanical worker. Does the actual implementation, offloads research to scouts, and returns a `stuck` signal instead of thrashing. |
-| `deep-debugger` | genius chain | Root-cause diagnostician. Read-only; returns the cause plus the exact fix and how to verify. Does not implement. |
+| `deep-debugger` | genius tier (`@slow`) | Root-cause diagnostician. Read-only; returns the cause plus the exact fix and how to verify. Does not implement. |
 | `deep-reviewer` | genius tier, varied per call | Clean reviewer with no native output schema, so call-site schemas apply cleanly. The pipeline overrides its model per lens (reviewers diversity set) and per ultra seat. |
 | `designer` | `@designer` | UI/UX specialist. Builds, modifies, and improves frontend pieces, reviews the `design` lens, and fixes frontend findings. Design-system-first and accessibility-aware. |
 | `david-research` | `@smol` | Cheap external research scout (web, docs, repos, APIs). Keeps internet context out of the parent. |
-| `review-orchestrator` | genius chain | Legacy manual review-loop orchestrator. Superseded by the in-pipeline `run_review_loop()`; kept for standalone, non-eval use. |
+| `review-orchestrator` | genius tier (`@slow`) | Legacy manual review-loop orchestrator. Superseded by the in-pipeline `run_review_loop()`; kept for standalone, non-eval use. Can drive a three-family panel via the pinned reviewers below. |
+| `fable-reviewer` | Fable 5 (pinned, high) | Model-pinned panel reviewer for manual cross-family reviews. Read-only; not used by the pipeline's review loop. |
+| `sol-reviewer` | GPT-5.6 Sol (pinned, xhigh) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
+| `opus-reviewer` | Opus 5 (pinned, max) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
 
-The exact model strings live in the `modelRoles` config and in each agent's frontmatter chain, and both are tunable. See [Configuration](/reference/configuration).
+The genius-tier agents reference roles (`@plan`, `@slow`) in their frontmatter, so retuning the anchored genius list in `modelRoles` moves all of them at once. The reviewers and every read-only investigator can spawn `david-research` to offload external docs and API lookups instead of burning their own context on the internet. The exact model strings live in the `modelRoles` config and in each agent's frontmatter, and both are tunable. See [Configuration](/reference/configuration).
 
 ## Project agents
 
