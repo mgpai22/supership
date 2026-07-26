@@ -22,10 +22,10 @@ flowchart TD
 ## The five stages
 
 1. **Clarify.** The planner in CLARIFY mode returns a dependency-ordered question tree, each question carrying a recommended answer it derived from the code. The main agent then grills you one question at a time, upstream decisions first, and produces a CLARIFIED SPEC. That spec, not the raw request, becomes the run's `TASK`. Auto runs skip this entirely.
-2. **Plan.** The planner in PLAN mode returns a structured plan. The main agent writes it to the dashboard. See [Planning](/pipeline/planning).
-3. **Execute.** Workers implement each piece. The wave shape (sequential, disjoint parallel, or overlapping parallel) comes from the plan. See [Execution](/pipeline/execution).
-4. **Review.** The shared review loop fans reviewers out per lens, judges, verifies, and fixes until a clean round. See [Review](/pipeline/review).
-5. **Consolidate.** Final state is written, lessons and debt are harvested, and per-repo memory captures the lessons. See [Consolidate](/pipeline/consolidate).
+2. **Plan.** The planner in PLAN mode returns a structured plan. The main agent writes it to the dashboard. See [Planning](/docs/pipeline/planning).
+3. **Execute.** Workers implement each piece. The wave shape (sequential, disjoint parallel, or overlapping parallel) comes from the plan. See [Execution](/docs/pipeline/execution).
+4. **Review.** The shared review loop fans reviewers out per lens, judges, verifies, and fixes until a clean round. See [Review](/docs/pipeline/review).
+5. **Consolidate.** Final state is written, lessons and debt are harvested, and per-repo memory captures the lessons. See [Consolidate](/docs/pipeline/consolidate).
 
 ## The dashboard
 

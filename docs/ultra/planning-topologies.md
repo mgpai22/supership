@@ -31,4 +31,4 @@ Everything duel does through the cross-critiques, then exactly one revision roun
 Every topology ends with `plato` as the sole owner of the final plan. Synthesis is never a committee merge. `plato` adopts the strongest elements, discards the rest, and records in the plan `notes` exactly what it took from the aristotle plan or critique and what it rejected and why.
 
 > [!NOTE]
-> The topology controls the **planning** shape only. Ultra review is always a fixed duel regardless of the planning topology. See [Ultra review](/ultra/review).
+> The topology controls the **planning** shape only. Ultra review is always a fixed duel regardless of the planning topology. See [Ultra review](/docs/ultra/review).

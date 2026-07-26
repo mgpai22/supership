@@ -10,7 +10,7 @@ Anything user-facing routes through the `designer` agent, omp's UI/UX specialist
 
 ## Build
 
-The planner tags any piece whose primary deliverable is UI as `agent="designer"` (building frontend from scratch, modifying it, or improving it). The build wave dispatches those pieces to the designer, with no pooling. Backend, API, and data pieces stay `task`. This is a semantic call the planner makes at plan time. See [Planning](/pipeline/planning).
+The planner tags any piece whose primary deliverable is UI as `agent="designer"` (building frontend from scratch, modifying it, or improving it). The build wave dispatches those pieces to the designer, with no pooling. Backend, API, and data pieces stay `task`. This is a semantic call the planner makes at plan time. See [Planning](/docs/pipeline/planning).
 
 ## Review
 

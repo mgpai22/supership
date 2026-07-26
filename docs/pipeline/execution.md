@@ -40,7 +40,7 @@ After a consult, the builder is re-dispatched **once** with the guidance folded 
 
 omp hard-aborts a subagent at 1.5x `task.softRequestBudget`. That abort can land after the child finished its work but before its final yield was recorded, which would misfile a finished piece as an error.
 
-Before writing a piece off, `run_build` calls `salvage_yield`, which reads the child's transcript, finds the final `yield` tool call, and recovers its result. If that recovered result says `status="done"`, the piece is marked done (tagged as salvaged) rather than lost. Raising `task.softRequestBudget` is what actually prevents the kill. See [Resume and recovery](/guides/resume-and-recovery).
+Before writing a piece off, `run_build` calls `salvage_yield`, which reads the child's transcript, finds the final `yield` tool call, and recovers its result. If that recovered result says `status="done"`, the piece is marked done (tagged as salvaged) rather than lost. Raising `task.softRequestBudget` is what actually prevents the kill. See [Resume and recovery](/docs/guides/resume-and-recovery).
 
 > [!TIP]
-> When a piece dies to a subscription limit rather than a budget kill, the build also flips to the other pool provider and re-dispatches the piece once there. See [Load balancing](/guides/load-balancing).
+> When a piece dies to a subscription limit rather than a budget kill, the build also flips to the other pool provider and re-dispatches the piece once there. See [Load balancing](/docs/guides/load-balancing).

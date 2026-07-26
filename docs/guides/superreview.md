@@ -37,7 +37,7 @@ The free-text argument is what the change is meant to do, plus any scope or non-
 
 `/superreview` writes a `.planning/review-<MMDD-HHMM>/plan.html` dashboard (override the slug with `--slug`), the same live UX as the pipeline: rounds, findings, and verdicts. It fixes on the shared tree (the full review, fix, and re-verify loop, not just a report). It is resumable via `/superreview resume`, which re-enters the loop against the original base, continues the round count from the file, and preserves fixes already applied.
 
-Because it shares `run_review_loop()` with the pipeline, the frontend design lens and the `is_frontend` fix routing apply here too. See [Frontend and design](/guides/frontend-and-design).
+Because it shares `run_review_loop()` with the pipeline, the frontend design lens and the `is_frontend` fix routing apply here too. See [Frontend and design](/docs/guides/frontend-and-design).
 
 ## Local only
 

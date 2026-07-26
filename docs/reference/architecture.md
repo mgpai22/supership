@@ -23,7 +23,7 @@ Every cell is the assignment lines plus the SHARED HELPERS block plus that cell'
 - **State I/O.** `save_state(S)` renders the dashboard from canonical JSON, `load_state()` parses it back, `plog(S, phase, msg)` appends a progress-log entry and saves, and `ensure_gitignore()` keeps `.planning/` out of git by default.
 - **`read_model_roles()`.** Reads `modelRoles` from omp config inside a cell body. Fail-open. Any error returns `{}` so callers fall back to their own defaults.
 - **Schemas.** `PLAN_SCHEMA`, `FINDINGS_SCHEMA`, `JUDGE_SCHEMA`, `BUILD_SCHEMA`, `VERIFY_SCHEMA`, and `UREVIEW_SCHEMA` (the ultra synthesis output, which reuses the findings and judge sub-schemas verbatim so the two review paths stay interchangeable).
-- **`is_frontend(path)`.** The mechanical frontend glob used for review and fix routing. See [Frontend and design](/guides/frontend-and-design).
+- **`is_frontend(path)`.** The mechanical frontend glob used for review and fix routing. See [Frontend and design](/docs/guides/frontend-and-design).
 - **`review_diff_hint(base)`.** What reviewers are told to inspect (the working tree by default, a committed range when a base is given).
 - **`run_review_loop(...)`.** The whole review engine (see below).
 
@@ -31,7 +31,7 @@ The load-balancing pool helpers (`pool_healthy`, `pool_model`, `pool_alt`) live 
 
 ## Shared review engine
 
-`run_review_loop()` is the single review-fix-reverify loop, factored out so `/supership` Cell 2 and the standalone `/superreview` drive the **identical** code. Fix it once, and both improve. Ultra versus normal is chosen inside the loop by whether `S["meta"]["ultra"]` is set; the two paths differ only in the front half and share the entire back half. See [Review](/pipeline/review) and [Ultra review](/ultra/review).
+`run_review_loop()` is the single review-fix-reverify loop, factored out so `/supership` Cell 2 and the standalone `/superreview` drive the **identical** code. Fix it once, and both improve. Ultra versus normal is chosen inside the loop by whether `S["meta"]["ultra"]` is set; the two paths differ only in the front half and share the entire back half. See [Review](/docs/pipeline/review) and [Ultra review](/docs/ultra/review).
 
 ## State model
 

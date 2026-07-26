@@ -46,7 +46,7 @@ The installer's `--config` applies `modelRoles`, `task.maxRecursionDepth`, `task
 These three read differently.
 
 - **A role is a fallback chain.** Entries are tried in order and the first resolvable model wins. There is no rotation. `default`, `smol`, `slow`, `plan`, `task`, `vision`, `tiny`, `commit`, `advisor`, `designer`, `plato`, and `aristotle` are all chains.
-- **`taskpool` is a pool.** The pipeline round-robins and health-checks each entry per provider to load-balance across subscriptions. Entries are single model patterns; weight one by repeating it; `[]` disables pooling; omitting the key uses the default. See [Load balancing](/guides/load-balancing).
+- **`taskpool` is a pool.** The pipeline round-robins and health-checks each entry per provider to load-balance across subscriptions. Entries are single model patterns; weight one by repeating it; `[]` disables pooling; omitting the key uses the default. See [Load balancing](/docs/guides/load-balancing).
 - **`reviewers` is a diversity set.** Entries alternate across the review lenses (model index `i % len`) so different lenses get different eyes. An entry may itself be a comma-joined chain, but the list as a whole is not a fallback chain.
 
 ## Sharing a list across roles
@@ -56,4 +56,4 @@ Use plain YAML anchors, the way the snippet does: define the list once (`slow: &
 Do **not** use `@role` strings as role values instead. A bare `@` is a YAML reserved character and breaks the whole config file (omp silently loads an empty config), and even quoted `"@role"` values expand only one level in several of omp's resolver paths, so alias-of-alias roles fail to resolve. Anchors sidestep both problems.
 
 > [!WARNING]
-> Chains ship as YAML lists and require omp >= 16.3.7. On older builds, flatten each list to one comma-separated string. The semantics are identical. See [Installation](/getting-started/installation).
+> Chains ship as YAML lists and require omp >= 16.3.7. On older builds, flatten each list to one comma-separated string. The semantics are identical. See [Installation](/docs/getting-started/installation).

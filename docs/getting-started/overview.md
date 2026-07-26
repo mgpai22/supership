@@ -30,7 +30,7 @@ State lives in the dashboard, not in agent memory. The embedded JSON is canonica
 - `/superreview` runs the review-and-fix loop standalone over your current local changes.
 - `resume` re-enters any interrupted run where it left off.
 
-See [Commands](/getting-started/commands) for the full table.
+See [Commands](/docs/getting-started/commands) for the full table.
 
 ```cards
 # Installation

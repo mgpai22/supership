@@ -10,11 +10,11 @@ Review is the shared `run_review_loop()` engine. The pipeline and the standalone
 
 ## Lenses
 
-The loop reviews per lens. It starts from the plan's `review_lenses` (default `correctness`, `security`, `edge-cases`, `design`), then always appends a standing **over-engineering** lens (the ponytail rubric). If frontend changed, it also appends a **design** lens. See [Frontend and design](/guides/frontend-and-design).
+The loop reviews per lens. It starts from the plan's `review_lenses` (default `correctness`, `security`, `edge-cases`, `design`), then always appends a standing **over-engineering** lens (the ponytail rubric). If frontend changed, it also appends a **design** lens. See [Frontend and design](/docs/guides/frontend-and-design).
 
 ## Round by round
 
-Each round runs this sequence. Everything after the reviewers is shared between the normal path and the [ultra path](/ultra/review).
+Each round runs this sequence. Everything after the reviewers is shared between the normal path and the [ultra path](/docs/ultra/review).
 
 1. **Reviewers fan out per lens.** Each lens gets a `deep-reviewer` running a model drawn from the `modelRoles.reviewers` diversity set (entries alternate across lenses so different lenses get different eyes). The `design` lens goes to the `designer` agent instead. `deep-reviewer` carries no native output schema, so the call-site findings schema applies cleanly, which sidesteps an intermittent schema violation with omp's bundled reviewer (oh-my-pi #3926).
 2. **The judge keeps the real findings.** A `completion(model="slow")` judge rules on each finding and drops nits, dupes, and false positives, then emits a per-lens verdict (`clean` or `issues_remain`).

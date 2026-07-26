@@ -36,4 +36,4 @@ Routing is subscription-aware in two layers, both reading omp's own durable usag
 Several Claude Max or Codex logins compose cleanly. omp natively hash-sticks each subagent session to one account and rotates off blocked or exhausted siblings, so intra-provider spreading is automatic. The proactive check evaluates the ledger per account and only marks a provider unhealthy when every account is drained or credential-blocked. One healthy Max account keeps the whole anthropic pool entry usable.
 
 > [!NOTE]
-> `taskpool` is a **pool** (round-robin plus health checks), which is a different thing from a fallback chain (first resolvable wins) or the `reviewers` **diversity set** (entries alternate across lenses). See [Configuration](/reference/configuration).
+> `taskpool` is a **pool** (round-robin plus health checks), which is a different thing from a fallback chain (first resolvable wins) or the `reviewers` **diversity set** (entries alternate across lenses). See [Configuration](/docs/reference/configuration).

@@ -42,12 +42,12 @@ me to restart my omp session. Reference: https://supership.shishirpai.com
 
 Everything lives at [supership.shishirpai.com](https://supership.shishirpai.com).
 
-- [Getting started](https://supership.shishirpai.com/getting-started/overview): overview, installation, commands.
-- [The pipeline](https://supership.shishirpai.com/pipeline/how-it-works): plan, execute, review, consolidate.
-- [Ultra mode](https://supership.shishirpai.com/ultra/overview): the plato and aristotle genius duel.
-- [Guides](https://supership.shishirpai.com/guides/superreview): standalone review, frontend and design, load balancing, resume and recovery.
-- [Reference](https://supership.shishirpai.com/reference/agents): agents, configuration, architecture.
-- [Changelog](https://supership.shishirpai.com/changelog/changelog): every merged pull request.
+- [Getting started](https://supership.shishirpai.com/docs/getting-started/overview): overview, installation, commands.
+- [The pipeline](https://supership.shishirpai.com/docs/pipeline/how-it-works): plan, execute, review, consolidate.
+- [Ultra mode](https://supership.shishirpai.com/docs/ultra/overview): the plato and aristotle genius duel.
+- [Guides](https://supership.shishirpai.com/docs/guides/superreview): standalone review, frontend and design, load balancing, resume and recovery.
+- [Reference](https://supership.shishirpai.com/docs/reference/agents): agents, configuration, architecture.
+- [Changelog](https://supership.shishirpai.com/docs/changelog/changelog): every merged pull request.
 
 ## License
 

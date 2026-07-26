@@ -43,7 +43,7 @@ agent | "task" \| "deep-debugger" \| "designer" | (required) | Which agent build
 The planner tags each piece with the agent that should build it. This is the build-time routing decision, a semantic call the planner makes.
 
 - **task** for mechanical work: backend, API, data, build config.
-- **designer** when the piece's primary deliverable is user-facing UI: building frontend from scratch, modifying it, or improving it (components, styling, layout, UX flows, client-side interactivity). The planner prefers splitting a half-UI, half-backend piece into a `designer` piece plus a `task` piece when both are substantial, otherwise it tags by the dominant surface. See [Frontend and design](/guides/frontend-and-design).
+- **designer** when the piece's primary deliverable is user-facing UI: building frontend from scratch, modifying it, or improving it (components, styling, layout, UX flows, client-side interactivity). The planner prefers splitting a half-UI, half-backend piece into a `designer` piece plus a `task` piece when both are substantial, otherwise it tags by the dominant surface. See [Frontend and design](/docs/guides/frontend-and-design).
 - **deep-debugger** only when the piece is expected to need hard diagnosis before any implementation.
 
 ## Approval gate

@@ -35,5 +35,5 @@ In an ultra run, a `design` escalation from a stuck builder is re-adjudicated by
 
 ## Where to go next
 
-- [Planning topologies](/ultra/planning-topologies) covers crossreview, duel, and debate.
-- [Ultra review](/ultra/review) covers the genius review duel.
+- [Planning topologies](/docs/ultra/planning-topologies) covers crossreview, duel, and debate.
+- [Ultra review](/docs/ultra/review) covers the genius review duel.

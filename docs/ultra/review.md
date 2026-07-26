@@ -29,4 +29,4 @@ Ultra review is always a duel, regardless of the planning topology. Crossreview 
 Ultra swaps only the front half of `run_review_loop`. The reviewer fan-out plus the judge are replaced by the genius duel of `ultra_review_round()`. Everything after "here are the confirmed findings" is the **identical code** the normal loop runs: the numeric gate, the fixers, the round loop, `MAX_ROUNDS`, the budget gate, clean detection, and the `found` / `kept` / `confirmed` dashboard records. Normal `/supership` runs are byte-for-byte unaffected.
 
 > [!INFO]
-> Ultra review rides the same `ULTRA` flag as ultra planning. There is no new config and no new command. You cannot get ultra review on a normally-planned run, which is an accepted non-goal. The one exception is [`/superreview`](/guides/superreview), which is always ultra.
+> Ultra review rides the same `ULTRA` flag as ultra planning. There is no new config and no new command. You cannot get ultra review on a normally-planned run, which is an accepted non-goal. The one exception is [`/superreview`](/docs/guides/superreview), which is always ultra.

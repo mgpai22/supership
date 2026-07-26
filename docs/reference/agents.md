@@ -21,7 +21,7 @@ The kit ships a roster of global agents. The pipeline spawns them by name via `a
 | `sol-reviewer` | GPT-5.6 Sol (pinned, xhigh) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
 | `opus-reviewer` | Opus 5 (pinned, max) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
 
-The genius-tier agents reference roles (`@plan`, `@slow`) in their frontmatter, so retuning the anchored genius list in `modelRoles` moves all of them at once. The reviewers and every read-only investigator can spawn `david-research` to offload external docs and API lookups instead of burning their own context on the internet. The exact model strings live in the `modelRoles` config and in each agent's frontmatter, and both are tunable. See [Configuration](/reference/configuration).
+The genius-tier agents reference roles (`@plan`, `@slow`) in their frontmatter, so retuning the anchored genius list in `modelRoles` moves all of them at once. The reviewers and every read-only investigator can spawn `david-research` to offload external docs and API lookups instead of burning their own context on the internet. The exact model strings live in the `modelRoles` config and in each agent's frontmatter, and both are tunable. See [Configuration](/docs/reference/configuration).
 
 ## Project agents
 
@@ -32,4 +32,4 @@ A repo can vendor its own specialists in `.omp/agents/*.md`. The pipeline discov
 The planner and the genius agents also spawn omp's own bundled scouts, which are not part of this kit: `scout` (read-only local codebase scout; named `explore` before omp 17) and `librarian` (library and API source). Both run on the cheap `smol` role. These keep fact-finding off the expensive genius reasoning.
 
 > [!NOTE]
-> Agent selection is an invariant, not a preference. Plan and consult go to `planner`, hard diagnosis to `deep-debugger`, review to `deep-reviewer`, always via an explicit `agent=`. Persona text in the prompt never substitutes for `agent=` (omp ≥17 removed the task tool's old `role=` field outright). See [Resume and recovery](/guides/resume-and-recovery) for why this matters.
+> Agent selection is an invariant, not a preference. Plan and consult go to `planner`, hard diagnosis to `deep-debugger`, review to `deep-reviewer`, always via an explicit `agent=`. Persona text in the prompt never substitutes for `agent=` (omp ≥17 removed the task tool's old `role=` field outright). See [Resume and recovery](/docs/guides/resume-and-recovery) for why this matters.
