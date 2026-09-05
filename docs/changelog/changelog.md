@@ -8,7 +8,7 @@ description: Merged Changes
 
 This page lists merged pull requests, newest first, from repository history. A pull request proposes repository changes for review.
 
-## OMP 18 upgrade: offline acceptance passed, rollout pending
+## OMP 18 upgrade: offline acceptance and global installation passed
 
 The upgrade replaces the Markdown/Python driver with one TypeScript extension, a Crust CLI, and three provider-neutral personas. An extension adds behavior to OMP. A CLI is a command-line interface. A persona supplies reusable agent instructions. Provider-neutral roles do not require a specific model service.
 
@@ -28,7 +28,9 @@ The complete offline suite and typecheck passed with compiled OMP 18.1.11 and SD
 
 Native test homes share their binary cache, stored executable files for reuse. They no longer extract a copy per fixture.
 
-Managed installation defaults to a dry-run inventory, a preview without changes. It preserves unrelated files. Protected persona replacement and actual global, Siftly, and Palmyra installations remain pending explicit confirmation. Scripted proofs do not establish real-model judgment quality.
+Managed installation defaults to a dry-run inventory, a preview without changes. It preserves unrelated files. Repository-specific migrations require separate approval. Scripted proofs do not establish real-model judgment quality.
+
+A real global OMP 18.1.11 session loaded all five commands from the new extension. A second installation preview proposed no changes.
 
 ## Merged history
 
