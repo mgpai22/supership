@@ -1,59 +1,70 @@
 ---
 title: Configuration
 order: 2
-description: modelRoles and Settings
+description: OMP model configuration and repository policy.
 ---
 
 # Configuration
 
-supership relies on a set of `modelRoles` plus a few `task`, `compaction`, and `memory` keys. Apply them with `./install.sh --config`, or merge `config/config.snippet.yml` by hand.
+Keep OMP configuration separate from Supership repository policy. `config/` contains examples. OMP does not load this directory automatically. The `.omp/` development model assignments in this repository are not product defaults.
 
-## modelRoles
+## OMP models
 
-```type-table
-# modelRoles
-default | chain | (main agent) | Fallback chain for the main agent.
-smol | chain | (scouts) | Cheap scouts: david-research, scout, librarian.
-slow | chain | (genius anchor) | The genius tier. Anchored once (`&genius`) and shared by plan, advisor, and reviewers.
-plan | chain | *genius | Alias of slow via YAML anchor; drives planner and deep-debugger (`@plan`/`@slow` in their frontmatter).
-task | chain | (workers) | Fallback chain for the mechanical task worker.
-vision | chain | | Image reads for text models and screenshot verification.
-tiny | chain | (cheap anchor) | Session titles and classifiers. Anchored (`&tiny`) and shared by commit.
-commit | chain | *tiny | Alias of tiny via YAML anchor; commit messages and changelogs.
-advisor | chain | *genius | Advisor rides the genius anchor.
-designer | chain | (@designer) | The designer agent's chain for frontend build, review, and fix.
-plato | chain | (loud-fail if unset) | Ultra seat: chief architect and final consolidator.
-aristotle | chain | (loud-fail if unset) | Ultra seat: challenger.
-taskpool | pool | default trio | Load-balancing pool for task builders, fixers, and verifiers.
-reviewers | diversity set | *genius | Reviewer models that alternate across the review lenses. An anchor to a concrete list is fine; it expands at parse time.
-```
+`config/config.snippet.yml` shows logical `task.agentModelOverrides` for the three package personas, reusable agent instructions. Merge only the configuration you choose into the intended OMP configuration layer. Never replace an existing user configuration wholesale.
 
-## task, compaction, memory
+The architect defaults to `@plan`. The critic and judge default to `@slow`. Configure those roles or explicit models from your available catalog.
 
-```type-table
-# task / compaction / memory
-task.maxRecursionDepth | number | 2 | Set to 3. Depth cap for subagent spawns; 3 keeps ad-hoc escalation's scouts alive.
-task.softRequestBudget | number | 90 | Set to 250. Requests before wrap-up; hard-abort at 1.5x.
-task.softRequestBudgetNotice | boolean | false | Set to true, so children get a wrap-up warning instead of a silent kill.
-compaction.strategy | string | | Use snapcompact (needs omp >= 16.2.8); older builds should use shake.
-memory.backend | string | | local captures consolidated Lessons into per-repo memory.
-```
+A `modelRoles` string/list expresses ordered resolution, the sequence for model selection. It does not distribute requests or prove that a provider request succeeds. A provider supplies model responses. Custom aliases, alternative model names, must resolve. Runtime fallback, an alternative after failure, needs an explicit declared policy.
 
-The installer's `--config` applies `modelRoles`, `task.maxRecursionDepth`, `task.softRequestBudget`, and `task.softRequestBudgetNotice`. The `compaction` and `memory` keys are not auto-applied; merge them from the snippet if you want them.
+`config/modelRoles.json` is an empty, provider-neutral role map. It no longer carries subscriptions, fixed model IDs, a task pool, or reviewer rotation. The installer does not apply it to global configuration.
 
-## Chain versus pool versus diversity set
+## Repository policy
 
-These three read differently.
+The extension reads `.omp/supership.json` as a strict versioned `PolicyOverlay`. An overlay adds repository rules to the workflow. `config/supership.example.json` is a neutral example. It does not replace required repository rules.
 
-- **A role is a fallback chain.** Entries are tried in order and the first resolvable model wins. There is no rotation. `default`, `smol`, `slow`, `plan`, `task`, `vision`, `tiny`, `commit`, `advisor`, `designer`, `plato`, and `aristotle` are all chains.
-- **`taskpool` is a pool.** The pipeline round-robins and health-checks each entry per provider to load-balance across subscriptions. Entries are single model patterns; weight one by repeating it; `[]` disables pooling; omitting the key uses the default. See [Load balancing](/docs/guides/load-balancing).
-- **`reviewers` is a diversity set.** Entries alternate across the review lenses (model index `i % len`) so different lenses get different eyes. An entry may itself be a comma-joined chain, but the list as a whole is not a fallback chain.
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | Supported policy contract version. Unknown versions fail before effects. |
+| `seats` | A seat assigns an agent and model through `seatId`, `agentName`, optional `model` and `sourcePath`. |
+| `namedFallbackSeats` | Explicit fallback seat IDs for each seat. |
+| `limits` | Optional `concurrency`, `tokens`, `cost: {amount, currency}`, `wallMs`, and `reviewRounds`. |
+| `requiredLenses` | A lens selects a review topic. This field adds mandatory topics. |
+| `verificationChecks` | Repository commands/scenarios and their path scope. |
+| `requiredVerification` | Requirements contain an ID, description, path scope, instructions, and source references. For each applicable ID and scope, the plan supplies executable steps to make sure that the requirement passes. Empty scope applies to every plan. Nonempty scope applies when it overlaps the plan paths. |
+| `phaseGates` | Required approval, consultation, verification, dependency, or restriction rules. |
+| `pathRouting` | Named path-to-seat rules with reasons and evidence. |
+| `instructionRefs` | Evidence references to applicable repository instructions. |
 
-## Sharing a list across roles
+Policy overlays do not install command copies or grant broader shell permissions. Migration preserves these repository requirements:
 
-Use plain YAML anchors, the way the snippet does: define the list once (`slow: &genius`) and reference it elsewhere (`plan: *genius`). Anchors expand when the file is parsed, so omp and this kit's raw config reads always see concrete lists.
+- Owner routing assigns work to the required agent.
+- Contract-before-consumer dependencies place interface changes before their callers.
+- Specialist consultations retain required expert input.
+- Required lenses retain mandatory review topics.
+- Path checks retain requirements for specific files.
+- Commit consent retains user approval.
+- Secret exclusions keep credentials outside output.
+- Migration rules preserve installation constraints.
+- Independent local commands retain their ownership.
 
-Do **not** use `@role` strings as role values instead. A bare `@` is a YAML reserved character and breaks the whole config file (omp silently loads an empty config), and even quoted `"@role"` values expand only one level in several of omp's resolver paths, so alias-of-alias roles fail to resolve. Anchors sidestep both problems.
+Structured verification scenarios include executable `operations`, not only descriptive `steps`. Verification establishes whether requirements pass. Operations can issue commands or control a browser. Browser actions include open, click, fill, text assertion, screenshot, and close.
 
-> [!WARNING]
-> Chains ship as YAML lists and require omp >= 16.3.7. On older builds, flatten each list to one comma-separated string. The semantics are identical. See [Installation](/docs/getting-started/installation).
+A manual requirement belongs in `requiredVerification` until the plan supplies executable steps to make sure that it passes. Prose alone cannot pass verification.
+
+## Invocation choices
+
+For an explicit model assignment within one run, use `--seat seat=model`. The extension also accepts `--concurrency`, `--tokens`, `--cost`, `--wall-ms`, and `--review-rounds`. It records the resolved choices with the run.
+
+No new finite token, cost, time, or round cap applies by default. Tokens are units of model input and output. Live OMP concurrency, the number of simultaneous tasks, remains the upper bound.
+
+Interactive planning asks about unspecified limits. Autonomous runs use configured defaults. Limits pause work instead of declaring success. Unknown pricing stays unknown. Already active requests can exceed a measured budget.
+
+OMP `task.maxConcurrency: 0` means unlimited. Supership records that ceiling as `null`, not zero. An explicit finite run concurrency limit still applies.
+
+Cost limits use USD. If prices or child observations are incomplete, the recorded priced subtotal is a lower bound. Supership pauses when that known subtotal reaches the cost limit. Unknown cost does not become free.
+
+Token counts include observed child messages. Missing or partial observations remain visible as incomplete coverage. These counters do not establish final invoice totals.
+
+If combined counters reach their numeric limits, the dashboard marks them as saturated lower bounds, minimum values beyond counter capacity. Individual usage sources remain recorded. A saturated cost overshoot is an observed minimum. It is not an exact invoice amount.
+
+The workflow does not enable persistent memory writes, change `prewalk` configuration, or raise global concurrency. It does not weaken OMP approvals in autonomous mode.

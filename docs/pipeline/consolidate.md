@@ -1,36 +1,40 @@
 ---
 title: Consolidate
 order: 5
-description: Final dashboard state, Lessons, ponytail-debt harvest, and per-repo memory.
+description: Conclusions, owned output, and retained evidence.
 ---
 
 # Consolidate
 
-The last stage closes out the run. Cell 2 sets the run status to `done`, saves the dashboard (which stops its live refresh), and prints a summary: the plan shape, each piece's status, the review rounds, the unresolved list, and whether the run ended clean.
+A completed run records the plan outcome, review decisions, verification evidence, and lessons for that run. Verification establishes whether requirements pass. A justified no-change result records why the task needs no output. It skips commits.
 
-A run counts as **clean** when the last review round confirmed nothing and there are no unresolved pieces. A round whose findings were all refuted also breaks clean.
+## Output ownership
 
-## Lessons
+Dirty tracked, staged, and untracked changes belong to the user baseline, the repository state before Supership work. Supership does not stage, overwrite, reset, or count them as generated output.
 
-After Cell 2 returns, the main agent writes a `## Lessons` section for you: recurring mistakes, dead-ends, and gotchas seen across planning, building, and review.
+Ownership within one file needs hunk/blob evidence. A hunk is a changed group of lines. A blob identifies complete file content in Git. A filename list is insufficient.
 
-## Debt Harvest (powered by [ponytail skill](https://github.com/DietrichGebert/ponytail))
+Commit and push require explicit invocation choices. After full review and verification, plan-defined commit groups contain only output with evidence of Supership ownership. If a touched hunk mixes ownership that cannot be separated, the run pauses.
 
-The build prompts encourage marking deliberate shortcuts with a `// ponytail:` comment naming the ceiling and the upgrade path. Consolidation harvests them by grepping the diff and the touched files for `ponytail:` markers, then lists each one with its ceiling and upgrade path under a `## Ponytail debt` heading.
+The requested output branch wins. Otherwise the engine uses `supership/<slug>` after plan approval when needed. It never commits to a default branch.
 
-## Patching the artifact
+Before a push, approve the remote, branch, and exact commits through the TUI, a terminal user interface. CAUTION: A push publishes those commits. Supership never force-pushes or rewrites shared history.
 
-Both writeups are patched back into the dashboard with a small eval so the artifact is complete and self-contained.
+## Local records and export
 
-```py
-S = load_state()
-S["lessons"] = """..."""
-S["ponytail_debt"] = ["file:line (marker text)", ...]
-save_state(S)
+`state.json` and `events.jsonl` determine the recorded state. The generated HTML is read-only. Lessons stay within the run. Supership neither writes persistent OMP memory nor creates managed skills automatically.
+
+The CLI, a command-line interface, can create a sanitized Markdown export, text with sensitive details removed. It contains the plan, decisions, findings, and verification. Before sharing, inspect the export. Export does not publish it.
+
+The run retains artifacts, patches, diagnostics, and worktrees after completion or cancellation. Artifacts retain work evidence. A worktree is a separate repository working copy. Cleanup is a separate confirmed command that lists exact paths. It does not operate automatically.
+
+## CLI operations
+
+```sh
+bun src/cli.ts export --run .planning/<slug>
+bun src/cli.ts cleanup --run .planning/<slug> --dry-run
 ```
 
-The main agent then points you at `.planning/<slug>/plan.html` for the final render.
+Export writes sanitized Markdown to stdout, the standard output stream. It does not overwrite an output file. Before redirecting the export to a new file, inspect it.
 
-## Per-repo memory
-
-With `memory.backend: local`, omp captures the consolidated lessons into per-repo memory, so they carry into future sessions in the same repo. The dashboard is the artifact for this run; memory is what carries the learning forward.
+After review, use `--apply --confirm <plan-digest>` to apply cleanup. CAUTION: Cleanup removes the listed paths. `--dry-run` always prevents cleanup effects.

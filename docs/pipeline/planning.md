@@ -1,55 +1,48 @@
 ---
 title: Planning
 order: 2
-description: Planner Modes and Plan Schema
+description: Evidence, dependencies, paths, and approval.
 ---
 
 # Planning
 
-## Modes
+Scouts, agents that collect evidence, prepare one cited research packet before planning. Both ultra seats receive that packet. A seat assigns an agent and model. Additional reads fill specific evidence gaps instead of repeating broad research.
 
-The `planner` agent is a genius architect with three modes. The pipeline picks the mode by what it asks for.
+The normal architect produces a plan. Ultra uses the selected [three, five, or seven-call graph](/docs/ultra/planning-topologies). The critic can produce an independent plan as well as a critique.
 
-- **CLARIFY.** Explore the task via cheap subagents, then return a dependency-ordered list of clarifying questions, each with a recommended answer the planner derived from the code. It answers from the code whatever the code can answer and only asks what it genuinely cannot. This produces questions, not a plan.
-- **PLAN.** The default. Return a concrete execution plan matching the schema below.
-- **CONSULT.** An implementer is stuck on a design question mid-build. The planner is handed the plan, the piece, what was tried, and the precise question, and it adjudicates. It clarifies intent, adjusts the piece, or descopes it, and returns actionable guidance, not a new plan.
+## Plan contract
 
-The planner never greps or browses itself. It offloads all fact-finding to cheap subagents (`david-research` for external docs and web, `scout` for the local codebase, `librarian` for library and API source) and reasons over their summaries.
+The runtime supplies a versioned strict schema, the required data structure. A plan describes these items:
 
-## Plan schema
+- The goal defines the required outcome.
+- Dependencies define work that must finish first.
+- Expected write paths identify files that can change.
+- Outputs define the deliverables.
+- Risks identify possible failures.
+- Required review lenses define review topics.
+- Verification checks establish whether requirements pass.
+- Commit groups define related changes for separate commits.
 
-PLAN mode returns an object matching `PLAN_SCHEMA`.
+Every dependency must resolve. The dependency graph must contain no cycles, chains that lead back to their starting item.
 
-```type-table
-# Plan
-mode | "sequential" \| "parallel" | (required) | sequential = one implementer does all pieces in order; parallel = pieces run concurrently.
-overlap | boolean | (required) | Parallel only. true if pieces may edit the SAME files (isolated worktrees plus serial synthesis); false if they touch disjoint files.
-pieces | Piece[] | (required) | Ordered, self-contained units of work. At least one, even for sequential plans.
-review_lenses | string[] | (required) | Review focuses to fan out, e.g. correctness, security, edge-cases, design.
-notes | string | (required) | Sequencing constraints plus synthesis and verification guidance.
-```
+Correctness and simplicity reviews are mandatory. Security, data, performance, and UI reviews follow the identified risks. Repository policy can require more lenses, specialist consultation, dependencies, and path-specific checks.
 
-Each piece is a small object.
+The engine rejects overlapping concurrent writes. Dependent or overlapping edits proceed sequentially in the active checkout, the working repository copy.
 
-```type-table
-# Piece
-id | string | (required) | Stable short id, e.g. p1.
-description | string | (required) | Complete standalone instruction for this piece's implementer.
-agent | "task" \| "deep-debugger" \| "designer" | (required) | Which agent builds the piece.
-```
+Independent builders use separate working copies when needed. Before integration, the combination of changes, the engine establishes ownership.
 
-## Per-piece agent
+## Limits and small tasks
 
-The planner tags each piece with the agent that should build it. This is the build-time routing decision, a semantic call the planner makes.
+Interactive planning asks about unspecified concurrency, token, cost, wall-time, and review-round limits. Concurrency is the number of simultaneous tasks. Tokens are units of model input and output. Wall-time is elapsed clock time.
 
-- **task** for mechanical work: backend, API, data, build config.
-- **designer** when the piece's primary deliverable is user-facing UI: building frontend from scratch, modifying it, or improving it (components, styling, layout, UX flows, client-side interactivity). The planner prefers splitting a half-UI, half-backend piece into a `designer` piece plus a `task` piece when both are substantial, otherwise it tags by the dominant surface. See [Frontend and design](/docs/guides/frontend-and-design).
-- **deep-debugger** only when the piece is expected to need hard diagnosis before any implementation.
+The engine recommends values from the task. Without a credible estimate, it recommends unlimited values. Autonomous runs use configured defaults.
 
-## Approval gate
+The default adds no finite token, cost, time, or review-round cap. Live OMP concurrency is always the ceiling. An explicit lower run ceiling can reduce it.
 
-Interactive runs pause here. Auto runs skip straight to execution.
+A trivial task can use a recorded single-worker path. Interactive mode requires approval for that reduction. The plan still needs applicable verification and recorded evidence.
 
-The main agent opens the dashboard, presents the plan in chat (shape, pieces, lenses, notes), and iterates with you. You can give feedback (which re-runs the planner with your feedback folded in, or patches pieces directly), or you can edit the JSON in the dashboard file yourself and say "re-read" to have the run reload your edits.
+## Approval and steering
 
-Nothing builds until you approve. On approval the run records the approval state, stamps the time, sets the status to `building`, and only then starts Cell 2.
+Interactive users approve or edit plans through trusted OMP TUI controls. TUI means terminal user interface. HTML never accepts edits or approvals. Autonomous runs record ordinary plan decisions automatically.
+
+New user instructions enter the event history immediately. The engine supersedes overlapping work, rejects stale results, and replans at a safe boundary. Unrelated workers can continue. Material amendments follow the approval rules of the selected mode. Safety approvals remain in force.

@@ -1,58 +1,100 @@
 ---
 title: Architecture
 order: 3
-description: Eval Cells and State Model
+description: Public OMP APIs, durable state, and parent access.
 ---
 
 # Architecture
 
-## Eval cells
+One TypeScript extension owns the state machine, the rules for workflow states and transitions. All five command aliases call it. An alias is another name for the same operation.
 
-The main agent authors and runs the pipeline as `eval` cells (`language: "py"`) on omp's `workflowz` engine. Three primitives drive everything:
+The Crust CLI, a command-line interface, reuses core operations for installation, diagnostics, migration, export, and cleanup. It does not implement a second workflow engine.
 
-- `agent(prompt, agent=..., model=..., schema=..., label=...)` spawns a named subagent and returns its structured result.
-- `parallel([...])` runs a list of thunks concurrently and returns their results in order.
-- `completion(prompt, model=..., schema=...)` runs a single model completion (used for the review judge).
+## Supported boundary
 
-Control flow is ordinary Python. The main agent authors this at depth 0 rather than delegating to a nested orchestrator.
+The target is Linux, Git, and OMP `>=18.1.10 <18.2.0`. Supership makes sure that OMP provides the required features. Source evidence uses OMP `5efa48385dde0a0c20cfadf62e2d5b95f84aafd1`. Observations from operation must separately identify the installed binary, the executable program.
 
-## SHARED HELPERS
+Native test homes share only their extracted binary cache, stored executable files for reuse. Configuration, providers, sessions, and evidence remain isolated. A provider supplies model responses. Evidence directories remain local after a run.
 
-Every cell is the assignment lines plus the SHARED HELPERS block plus that cell's body. The helpers block holds:
+For compiled-host verification, put the intended OMP directory first on PATH. Set `SUPERSHIP_ACCEPTANCE_OMP` to its absolute path. Operate `bun test ./test` directly.
 
-- **State I/O.** `save_state(S)` renders the dashboard from canonical JSON, `load_state()` parses it back, `plog(S, phase, msg)` appends a progress-log entry and saves, and `ensure_gitignore()` keeps `.planning/` out of git by default.
-- **`read_model_roles()`.** Reads `modelRoles` from omp config inside a cell body. Fail-open. Any error returns `{}` so callers fall back to their own defaults.
-- **Schemas.** `PLAN_SCHEMA`, `FINDINGS_SCHEMA`, `JUDGE_SCHEMA`, `BUILD_SCHEMA`, `VERIFY_SCHEMA`, and `UREVIEW_SCHEMA` (the ultra synthesis output, which reuses the findings and judge sub-schemas verbatim so the two review paths stay interchangeable).
-- **`is_frontend(path)`.** The mechanical frontend glob used for review and fix routing. See [Frontend and design](/docs/guides/frontend-and-design).
-- **`review_diff_hint(base)`.** What reviewers are told to inspect (the working tree by default, a committed range when a base is given).
-- **`run_review_loop(...)`.** The whole review engine (see below).
+`bun run test` prepends local package executables and can select the SDK CLI instead. SDK means software development kit.
 
-The load-balancing pool helpers (`pool_healthy`, `pool_model`, `pool_alt`) live in Cell 2's POOL block, not in the shared helpers. `run_review_loop` reaches for them lazily from the calling cell's globals at call time, which is why `/superreview` pastes both the helpers and the POOL block.
+At startup, Supership reads the active host version through the public OMP import alias. A plugin-local SDK copy cannot replace that version. CLI doctor separately makes sure that its selected executable meets the requirements. It reports probe failures.
 
-## Shared review engine
+The extension does not fabricate a `ToolSession` or import private task/eval internals. Eval means code evaluation within a persistent session. The extension does not change upstream code. It does not launch an independent production OMP process as a substitute child. The main agent performs actions that require its own session.
 
-`run_review_loop()` is the single review-fix-reverify loop, factored out so `/supership` Cell 2 and the standalone `/superreview` drive the **identical** code. Fix it once, and both improve. Ultra versus normal is chosen inside the loop by whether `S["meta"]["ultra"]` is set; the two paths differ only in the front half and share the entire back half. See [Review](/docs/pipeline/review) and [Ultra review](/docs/ultra/review).
+Current JavaScript coordination uses awaited handles, `wait()`, and WorkPool. A handle refers to active work. WorkPool schedules repeated independent tasks.
 
-## State model
+Action identity and receipts, records of observed action results, cover eval-only lifecycle operations that do not emit ordinary tool hooks. Hooks notify extensions about tool events. Ordinary `await tool.*` calls retain OMP wrappers and approval requirements. A child submits its final result through native top-level yield. An eval-bridged yield cannot finalize it.
 
-The canonical state `S` is a single JSON object embedded in the dashboard.
+## State
 
-```type-table
-# S
-meta | object | | task, slug, mode, created, updated, status, plus ultra (topology + seats) and base when present.
-spec | string | | The CLARIFIED SPEC (or the raw task in auto mode). This is the run's TASK.
-plan | object | | The plan (mode, overlap, pieces, review_lenses, notes), with per-piece status and summary.
-approval | object | | state (pending / approved / auto), at, notes.
-progress_log | array | | Timestamped phase and message entries.
-review_rounds | array | | Per round: found, kept, confirmed, verdicts.
-findings | array | | Confirmed findings across rounds.
-unresolved | array | | Pieces surfaced as unresolved, each with a reason.
-lessons | string | | The consolidated Lessons writeup.
-ponytail_debt | array | | Harvested // ponytail: markers with ceiling and upgrade path.
+`state.json` and `events.jsonl` retain versioned runs, owners, plans, actions, decisions, evidence, and recovery. Atomic snapshots provide complete state versions. Append-only events retain history without replacement. These records determine recovery. Logical work identity survives the loss of temporary handles and pool workers.
+
+The event log holds metadata, hashes, summaries, and OMP references instead of complete sensitive transcripts. Metadata describes other data. Hashes identify content. Unknown versions and stale revisions fail before effects. Duplicate and late receipts require reconciliation, a comparison of recorded and observed work.
+
+Observed usage sources and per-execution coverage also persist in the event log. Missing optional child-observation files do not erase recorded usage. New corrupt observations remain explicit gaps. They do not block unrelated accounting or control actions.
+
+The engine generates `plan.html` as read-only HTML. It cannot approve, change, or resume work. Old HTML-only runs remain historical. The engine cannot import them as executable state.
+
+A sanitized Markdown export, text with sensitive details removed, requires an explicit local operation. Publication requires separate permission.
+
+## Dynamic tools
+
+Any agent can propose a JavaScript tool for the current run. Only the main orchestrator, the agent that coordinates work, registers it through native `tool(fn, {name, description, parameters})`. The orchestrator grants access to task/agent/workpool recipients.
+
+Any worker can propose raw JavaScript source and a schema, the required data structure, through its strict native output. The proposal includes purpose, initialization inputs, intended users, and effects.
+
+The parent makes sure that the source meets the policy and captures it. Before storage, it replaces source with artifact references and source/schema hashes. Artifacts retain work evidence. This needs no separate worker-owned registry or extra model-driven capture action.
+
+The engine records source/schema hashes, approval scope, recipients, and registration generation. Interactive users approve source/schema/grants in the TUI, a terminal user interface. Autonomous policy records its decision without changing OMP permissions.
+
+Pre-plan proposals require TUI approval in both modes.
+
+Source or schema changes and broader grants invalidate the old approval where required. Policy rejects obvious raw filesystem/network/process effects and apparent secrets. For external effects, use approved `await tool.*` calls.
+
+Do not treat source review as a sandbox, a boundary that restricts code effects. CAUTION: Source inspection cannot prove arbitrary code safe. Even a bridged shell command can do arbitrary code.
+
+A callback is a function that another task invokes. A callback granted to an isolated child operates in the parent kernel, the persistent JavaScript environment. Label it worktree isolation with parent access. A worktree is a separate working copy of a repository. Parent writes do not enter the captured child patch.
+
+OMP 18.1.10 native `task` children also share the parent JavaScript eval session. Fresh message history does not isolate those globals, values shared within a JavaScript session.
+
+Eval `agent()` children and WorkPool children use independent eval sessions. This distinction does not make approved parent callbacks a sandbox.
+
+Builder callbacks use a controller-owned persistent checkout. For dependent edits, they use the approved active checkout. The controller captures those effects and records their owner separately from native task scratch changes. Native worktree cleanup does not remove the retained checkout.
+
+Workspace call/return receipts record observed before/after identities. A builder claim that it changed code does not prove ownership. If effects are uncertain, a trusted user must decide their disposition before the workflow advances.
+
+After kernel loss, affected grants become unavailable and work pauses. Under the applicable approval policy, recreate or re-propose the tools. Never automatically evaluate stored source.
+
+If captured mutable objects cannot be recreated, re-propose the tool. For recovery, the engine treats tools with unknown effects as tools that change state.
+
+## Package loading contract
+
+The package registers one extension through `package.json`:
+
+```json
+{ "omp": { "extensions": ["./src/extension.ts"] } }
 ```
 
-Every write is code-driven from the pipeline, so the artifact cannot drift from reality, and each cell re-reads the file so the run is resume-safe.
+The three persona files, reusable agent instructions, live in root `agents/`. No manifest field lists agents. A manifest declares package resources. The package registers no Markdown command. The package file list and active discovery exclude the old `omp/` payload.
 
-## Recursion depth
+Pinned source references:
 
-The main agent is depth 0, each `agent()` child adds 1, and a spawner may call `agent()` only while its depth is below `task.maxRecursionDepth` (the eval hard cap is 3). Authoring at depth 0 keeps consultants at depth 1 with room for their own scouts at depth 2. The full escalation chain (`task` to `deep-debugger` to its scouts) needs `maxRecursionDepth >= 3`; the default of 2 blocks the innermost spawn.
+- `packages/coding-agent/src/extensibility/extensions/loader.ts:493-546`: directory extension roots read `omp.extensions` from `package.json`.
+- `packages/coding-agent/src/extensibility/plugins/types.ts:27-48`: `omp`/`pi` manifest fields include extension paths, without agent paths.
+- `packages/coding-agent/src/extensibility/plugins/loader.ts:147-170`: enabled packages read the `omp` or `pi` manifest.
+- `packages/coding-agent/src/extensibility/plugins/loader.ts:423-481`: manifest extension entries resolve to extension files.
+- `packages/coding-agent/src/task/discovery.ts:43-59,99-105`: discovery reads Markdown directly under each extension root in `agents/`, without nested directories.
+- `packages/coding-agent/src/discovery/omp-extension-roots.ts:343-383`: enabled local/link packages supply resource roots.
+
+These source findings establish loading conventions. They do not prove that actual installations use the new package.
+
+## Verification limits
+
+Supership uses scripted providers to make sure that requirements pass through real OMP sessions, tasks, eval, hooks, and native yield. The test harness isolates `HOME/config/auth`, disables ambient model features, and blocks external network access. No fictional mock/offline CLI flag substitutes for this boundary.
+
+These scripts provide evidence for the software behavior that they exercise. They do not prove model judgment quality. The complete offline suite and typecheck passed with compiled OMP 18.1.11 and the pinned SDK 18.1.10 fixtures.
+
+This evidence does not cover every patch in the supported range. 

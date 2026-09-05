@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "seats": [],
+  "namedFallbackSeats": [],
+  "limits": {},
+  "requiredLenses": ["correctness", "simplicity"],
+  "verificationChecks": [],
+  "phaseGates": [],
+  "pathRouting": [],
+  "instructionRefs": []
+}

@@ -1,34 +1,63 @@
 ---
 title: Resume and recovery
 order: 4
-description: Resume and Budget Recovery
+description: Reconcile owners and effects before retry.
 ---
 
 # Resume and recovery
 
-Every command accepts `resume`. Because the dashboard file is the source of truth and every eval cell re-reads it, a run can pick up cold.
+Resume reads versioned `state.json` and `events.jsonl`. These files record state and events. It does not evaluate old HTML or parse legacy embedded state. It does not trust a saved process-local handle, a reference valid within one process. Unknown versions fail before side effects, changes outside the calculation itself.
 
-## Resume
+## Interrupted work
 
-Given a slug, resume uses that run. Otherwise it picks the newest `.planning/` dashboard whose status is not `done` or `failed`, then branches on the stored status.
+An interrupted eval, code evaluation within a persistent session, can leave child work alive. Before another spawn, reconcile live owners, action receipts, OMP artifacts/history, and results. Reconciliation compares recorded and observed work. Receipts record action results. Artifacts retain work evidence.
 
-- `awaiting_approval` re-enters the approval gate.
-- `building` or `reviewing` re-runs Cell 2 as-is. It skips pieces already `done` and continues the review-round count from the file.
-- `planning` or `clarifying` (rare, died mid-plan) restarts Cell 1 from the stored spec.
+Duplicate receipts and late results must match the action and current plan revision before acceptance.
 
-## Interrupted eval cells
+Read-only work can retry after the engine establishes that no live owner or valid result remains. Builders require inspection of patches and worktrees, separate repository working copies. The user then chooses adopt/retry/discard through the trusted TUI, a terminal user interface. An invalid result does not prove that no file changed.
 
-An interrupted eval cell (a `KeyboardInterrupt`) does **not** kill the `agent()` jobs it spawned. They keep running in the background and usually finish, writing their result to the session artifacts (`<label>.md`, also retrievable with the eval `output("<job id>")` helper; check `/jobs`).
+WorkPool, a scheduler for repeated independent tasks, reconstructs pending logical items after reconciliation of live workers. A pool handle is not durable state, a record that survives process loss.
 
-So recover, do not redo. Check the job first. If it is still running, wait or poll it. If it finished, fetch its result and continue the pipeline from that exact point. Respawning burns the money already spent and orphans a live genius job.
+Without cancellation evidence, the run remains visibly cancelling or blocked. A cancellation request alone is not an acknowledgment.
 
-## Budget kills
+## Lost JavaScript kernel
 
-omp caps each subagent at `task.softRequestBudget` requests. At the budget it may steer the child to wrap up (only if `task.softRequestBudgetNotice` is true), and at 1.5x it hard-aborts, sometimes in the exact instant the child is yielding `status="done"`. `run_build` salvages that case automatically via `salvage_yield`. If a piece still lands unresolved with this error:
+Kernel loss invalidates dynamic-tool registrations and grants. The kernel is the persistent JavaScript environment. Grants authorize recipients to call a tool. Affected work pauses. The main agent must recreate or re-propose tools under the applicable approval policy with a new registration generation.
 
-1. The child's edits survive in the working tree. Run `git status` before assuming loss; its transcript holds its findings.
-2. Re-dispatch as a **continuation** ("prior work is on disk at `<files>`; verify and finish, do not restart"), never a from-scratch redo.
-3. For heavy pieces (debuggers routinely need 150-plus requests), raise `task.softRequestBudget` and enable `task.softRequestBudgetNotice` so children get the wrap-up warning instead of a silent kill.
+Resume never evaluates stored source automatically. Source, schema, or grant changes create a new tool version. A schema defines the required data structure. Captured state that cannot be serialized into stored data requires re-proposal.
 
-> [!DANGER]
-> **Never downgrade a genius to a generic worker.** Do not re-route planning, consult, or debug work to a generic worker as a "faster fallback." The only agent selector on a task item is `agent=` (omp ≥17 removed the old `role=` field outright; `name` is just a registry id). A task item without an explicit `agent="planner"` runs on the generic task worker, silently swapping the genius brain for a cheap one. If the genius genuinely cannot run, stop and tell the user. Repeated interrupts are an environment problem to surface, not to code around with a weaker spawn path.
+For recovery, the engine treats tools with unknown effects as tools that change state. An agent label of read-only does not change this rule.
+
+## Limits and conflicts
+
+Token, cost, wall-time, and optional review-round caps pause work that can later resume. Tokens are units of model input and output. Wall-time is elapsed clock time. Unknown pricing stays unknown.
+
+At observable boundaries, Supership makes sure that recorded cost and tokens remain below their limits. Active provider requests can therefore exceed the limit. A provider supplies model responses. The TUI reports the observed excess rather than a hard billing limit.
+
+The engine accepts non-overlapping external edits. Overlapping edits pause work before integration, the combination of worker changes. User instructions supersede overlapping work. The engine rejects stale results while unrelated work can continue safely.
+
+After two rounds without progress and with repeated finding fingerprints, the TUI offers reviewer changes, an explicit reasoned override, or stop. A fingerprint identifies the same finding across rounds. Two-judge disagreement also pauses autonomous runs.
+
+## Interrupted installation migration
+
+Use `bun src/cli.ts migrate --recover /path/to/journal.json` to preview the original migration plan. This does not apply changes.
+
+After review, add `--apply --confirm <original-plan-sha256>` with each required `--confirm-file` token. CAUTION: Recovery changes installation files. It retains the original manifest, the file that declares ownership and operations. It refuses conflicting later edits.
+
+To preview rollback, use `migrate --rollback /path/to/journal.json`. Rollback restores the prior installation state. It requires its fresh preview checksum, a value that identifies preview content. The original forward checksum cannot authorize rollback. Default rollback refuses later edits and post-effect mismatches.
+
+After review, use `--apply --confirm <rollback-preview-sha256>`. CAUTION: This command restores the listed files and can discard later edits that the diff shows. A diff shows changes between file versions.
+
+For each changed target, supply its exact `--confirm-file <token>` from the fresh preview. The diff shows current and restoration bytes. It uses base64 for binary content.
+
+A changed registry preview includes all records and configuration. Keep it private.
+
+No token bypasses missing or corrupt backups, unsafe paths, or changes after preview. Partial rollback requires another fresh preview.
+
+See [Installation](../getting-started/installation.md#rollback-and-retention) for per-file recovery and the trusted `--manifest` boundary. Workflow recovery is separate from installation migration recovery.
+
+## Retention and cleanup
+
+Cancellation preserves state, events, patches, diagnostics, artifacts, and worktrees. Cleanup is a separate confirmed operation that lists exact paths. It never operates as a side effect of cancellation.
+
+Old `plan.html` files remain readable historical records. To continue that intent, start a new run. The upgrade has no legacy-run importer.

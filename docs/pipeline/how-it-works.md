@@ -1,49 +1,48 @@
 ---
 title: How it works
 order: 1
-description: The five stages, the dashboard, MODE, and eval-cell authoring.
+description: One extension-owned state machine.
 ---
 
 # How it works
 
-A supership run is five stages driven by real code. The main agent authors `eval` cells that call the named global agents and record everything to a self-rendering dashboard.
+All five commands use one engine. The extension makes sure that state transitions, approvals, tool actions, results, and recovery meet the workflow requirements. A state transition changes recorded workflow progress.
+
+The main OMP agent does typed next-action instructions in its existing session. Typed instructions define their required data structure.
 
 ```mermaid
 flowchart TD
-    C[0 Clarify<br/>interactive only] --> P[1 Plan<br/>planner to plan.html]
-    P --> G{Approval gate<br/>interactive only}
-    G -->|approved| E[2 Execute<br/>sequential / parallel]
-    E --> R[3 Review loop<br/>reviewers to judge to verify to fix]
-    R -->|clean round| K[4 Consolidate<br/>Lessons + debt]
-    R -->|findings remain| E2[re-review after fixes]
-    E2 --> R
+  A[Preflight] --> B[Clarify scope and limits]
+  B --> C[Shared cited research]
+  C --> D[Plan]
+  D --> E[Approve or record autonomous decision]
+  E --> F[Build dependency-ready work]
+  F --> G[Fresh review and judge decisions]
+  G -->|Accepted findings| F
+  G -->|Review satisfied| H[Verify integrated result]
+  H --> I[Optional confirmed output operations]
+  I --> J[Conclude and retain evidence]
+  G -->|Disagreement or stall| P[Pause in TUI]
 ```
 
-## The five stages
+Autonomous mode skips the interview and ordinary approval steps. It preserves the other transitions and safety requirements. Review-only mode starts from a fixed local diff scope, the selected set of file changes.
 
-1. **Clarify.** The planner in CLARIFY mode returns a dependency-ordered question tree, each question carrying a recommended answer it derived from the code. The main agent then grills you one question at a time, upstream decisions first, and produces a CLARIFIED SPEC. That spec, not the raw request, becomes the run's `TASK`. Auto runs skip this entirely.
-2. **Plan.** The planner in PLAN mode returns a structured plan. The main agent writes it to the dashboard. See [Planning](/docs/pipeline/planning).
-3. **Execute.** Workers implement each piece. The wave shape (sequential, disjoint parallel, or overlapping parallel) comes from the plan. See [Execution](/docs/pipeline/execution).
-4. **Review.** The shared review loop fans reviewers out per lens, judges, verifies, and fixes until a clean round. See [Review](/docs/pipeline/review).
-5. **Consolidate.** Final state is written, lessons and debt are harvested, and per-repo memory captures the lessons. See [Consolidate](/docs/pipeline/consolidate).
+## Durable authority
 
-## The dashboard
+`.planning/<slug>/state.json` is an atomic snapshot, a complete state version that replaces its predecessor. `events.jsonl` retains decisions, hashes, evidence summaries, and OMP artifact/history references without changing earlier entries. Hashes identify content. Artifacts retain work evidence.
 
-Durable state lives in `.planning/<slug>/plan.html`. The `<script id="plan-data">` JSON is canonical and the visible page is a derived render. Open it in a browser and it live-refreshes every five seconds while the run is active, then stops once the status is `done` or `failed`.
+These files do not duplicate complete model transcripts. Unknown schema versions fail before side effects. A schema defines the required data structure. Side effects change state outside the calculation itself.
 
-Every write is code-driven from the pipeline, never trusted to agent memory, so the dashboard cannot drift from reality. The file is the source of truth. Each eval cell re-reads it, which is what makes the whole run resume-safe. The page is dark, dependency-free, `file://`-safe, and renders with `textContent` only so agent text cannot inject markup.
+The engine generates `plan.html` as read-only presentation. The TUI, a terminal user interface, controls approvals, plan edits, tool grants, disagreements, and recovery. A grant authorizes access to a tool.
 
-## MODE, interactive versus auto
+Local `.planning/` data stays ignored. For deliberate sharing, use a sanitized export, text with sensitive details removed. Do not commit raw run data.
 
-`MODE` is set in the first eval cell.
+## Session execution
 
-- **interactive** (via `/supership`, `/ultraship`) runs the clarify interview and pauses at the approval gate. The plan's status starts as `awaiting_approval`.
-- **auto** (via `/shipit`, `/ultrashipit`) skips both. Cell 1 sets the approval state to `auto` and the status to `building`, so Cell 2 runs immediately.
+Finite groups use current task or JavaScript `agent()` handles and `wait()`. A handle refers to active work. WorkPool schedules repeated independent tasks. The engine stores logical actions and items separately from temporary handles, pools, and worker processes.
 
-## Eval cells and the recursion-depth rule
+Each managed action binds the run, revision, input hash, expected recipients, and a one-time receipt, a record of the observed result. Ordinary bridged `tool.*` calls pass normal extension hooks, notifications about tool events.
 
-The main agent authors and runs the pipeline as `eval` cells with `language: "py"`, using `agent()`, `parallel()`, and `completion()`. Orchestration is never handed to a nested orchestrator agent.
+Eval-only handle and pool operations need explicit managed receipts because they do not independently emit every ordinary tool event. Eval means code evaluation within a persistent session.
 
-Every cell is the assignment lines plus the SHARED HELPERS block plus that cell's body. The eval kernel persists state between cells, but re-including the helpers is harmless and keeps each cell runnable cold (which is how resume works).
-
-Recursion depth is a hard contract. The main agent is depth 0, each `agent()` child adds 1, and a spawner may call `agent()` only while its depth is below `task.maxRecursionDepth` (the eval hard cap is 3). Authoring the pipeline at depth 0 keeps consultants you spawn at depth 1, which leaves them room for their own scouts at depth 2. This is why the kit asks for `maxRecursionDepth: 3`.
+This cooperative workflow is not a sandbox, a boundary that restricts code effects. Approved JavaScript, shell code, and parent callbacks can cause effects outside the managed protocol. A callback is a function that another task invokes. See [Architecture](/docs/reference/architecture).

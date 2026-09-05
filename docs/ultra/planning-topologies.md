@@ -1,34 +1,63 @@
 ---
 title: Planning topologies
 order: 2
-description: Crossreview, Duel, and Debate
+description: The exact three, five, and seven-call planning graphs.
 ---
 
 # Planning topologies
 
-The ultra planner has three topologies, selected by the first word of the command arguments. The default is `duel`. If the first word is not a topology name, it is treated as part of the task.
+A topology defines the order of planning calls. The first ultra argument selects `crossreview`, `duel`, or `debate`. The default is `duel`. Counts exclude shared research, retries, and later review.
 
-| Topology | Genius calls | Flow | Use when |
-|---|---|---|---|
-| `crossreview` | 3 | plato plans, aristotle red-teams it, plato revises its own plan | cheapest sanity check on a single strong plan |
-| `duel` | 5 | both plan blind in parallel, each red-teams the rival's plan, plato synthesizes | you want two genuinely independent takes reconciled |
-| `debate` | 7 | duel through the critiques, then one revision round (each revises its own plan given the rival plus the critique it received), plato synthesizes | highest-stakes plans worth a full argue-and-refine |
+## Crossreview: three calls
 
-## crossreview (3 calls)
+```mermaid
+flowchart LR
+  A[Architect plan] --> B[Critic critique]
+  B --> C[Architect revision]
+```
 
-The cheapest topology. `plato` produces a plan, `aristotle` red-teams it, and `plato` revises its own plan to address every valid critique point. One strong author, one challenge, one revision.
+The architect revises its own plan against the critique. It records accepted and rejected points with reasons.
 
-## duel (5 calls)
+## Duel: five calls
 
-`plato` and `aristotle` plan **blind** in parallel, neither seeing the other's work. Then each red-teams the rival's plan in parallel (`plato` critiques aristotle's plan and vice versa). Finally `plato` synthesizes THE plan from both plans and both critiques. This is the default.
+```mermaid
+flowchart TD
+  R[Shared cited evidence] --> A[Architect blind plan]
+  R --> B[Critic blind plan]
+  A --> C[Critic critiques architect plan]
+  B --> D[Architect critiques critic plan]
+  A --> E[Architect synthesis]
+  B --> E
+  C --> E
+  D --> E
+```
 
-## debate (7 calls)
+The architect and critic produce plans concurrently without access to the rival plan. Both then critique the rival plan concurrently. The architect combines both plans and both critiques into a final plan.
 
-Everything duel does through the cross-critiques, then exactly one revision round. Each genius revises its **own** plan given the rival's plan and the critique it received, stealing the rival's best ideas. Then `plato` synthesizes from the two revised plans plus both critiques. The revision round is hard-capped at one; there are no convergence loops.
+## Debate: seven calls
 
-## Synthesis
+```mermaid
+flowchart TD
+  R[Shared cited evidence] --> A[Architect blind plan]
+  R --> B[Critic blind plan]
+  A --> C[Critic critiques architect plan]
+  B --> D[Architect critiques critic plan]
+  A --> E[Architect revises own plan]
+  B --> E
+  C --> E
+  A --> F[Critic revises own plan]
+  B --> F
+  D --> F
+  E --> G[Architect synthesis]
+  F --> G
+  C --> G
+  D --> G
+```
 
-Every topology ends with `plato` as the sole owner of the final plan. Synthesis is never a committee merge. `plato` adopts the strongest elements, discards the rest, and records in the plan `notes` exactly what it took from the aristotle plan or critique and what it rejected and why.
+After the independent plans and cross-critiques, both seats revise their own plans concurrently. A seat assigns an agent and model. Each revision receives its own plan, the rival plan, and the critique it received.
 
-> [!NOTE]
-> The topology controls the **planning** shape only. Ultra review is always a fixed duel regardless of the planning topology. See [Ultra review](/docs/ultra/review).
+The architect combines the revised plans and both critiques. This adds exactly one revision round. It does not create an unlimited planning debate.
+
+The critic acts as a planner during blind-plan and own-plan revision calls. Every dependent step receives named prior outputs explicitly. No topology permits missing seats, stale revisions, or undeclared fallback models. A fallback supplies an alternative after failure.
+
+Planning topology does not set review topology. [Ultra review](/docs/ultra/review) always uses two independent judges.
