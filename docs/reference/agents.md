@@ -1,35 +1,52 @@
 ---
 title: Agents
 order: 1
-description: The Agent Roster
+description: Three package personas and reused OMP workers.
 ---
 
 # Agents
 
-The kit ships a roster of global agents. The pipeline spawns them by name via `agent(...)`. Each agent's model comes from its own frontmatter chain, except where the pipeline overrides it with a call-site `model=` (the reviewers and the ultra seats).
+The package supplies exactly three personas, reusable agent instructions, under root `agents/`. Their model roles do not require a specific provider. A provider supplies model responses. The files contain no embedded task-specific output schema, the required result structure.
 
-| Agent | Model | Purpose |
-|---|---|---|
-| `planner` | genius tier (`@plan`) | Architect. Three modes: CLARIFY (question tree), PLAN (structured plan), CONSULT (adjudicate a stuck builder's design question). Investigates only via cheap subagents; never implements. |
-| `task` | `@task` (the task pool) | Mechanical worker. Does the actual implementation, offloads research to scouts, and returns a `stuck` signal instead of thrashing. |
-| `deep-debugger` | genius tier (`@slow`) | Root-cause diagnostician. Read-only; returns the cause plus the exact fix and how to verify. Does not implement. |
-| `deep-reviewer` | genius tier, varied per call | Clean reviewer with no native output schema, so call-site schemas apply cleanly. The pipeline overrides its model per lens (reviewers diversity set) and per ultra seat. |
-| `designer` | `@designer` | UI/UX specialist. Builds, modifies, and improves frontend pieces, reviews the `design` lens, and fixes frontend findings. Design-system-first and accessibility-aware. |
-| `david-research` | `@smol` | Cheap external research scout (web, docs, repos, APIs). Keeps internet context out of the parent. |
-| `review-orchestrator` | genius tier (`@slow`) | Legacy manual review-loop orchestrator. Superseded by the in-pipeline `run_review_loop()`; kept for standalone, non-eval use. Can drive a three-family panel via the pinned reviewers below. |
-| `fable-reviewer` | Fable 5 (pinned, high) | Model-pinned panel reviewer for manual cross-family reviews. Read-only; not used by the pipeline's review loop. |
-| `sol-reviewer` | GPT-5.6 Sol (pinned, xhigh) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
-| `opus-reviewer` | Opus 5 (pinned, max) | Model-pinned panel reviewer. Read-only; not used by the pipeline's review loop. |
+- `supership-architect` uses `@plan` for plans, revisions, synthesis, and design advice.
+- `supership-critic` uses `@slow` for blind alternatives, critiques, and own-plan revisions.
+- `supership-judge` uses `@slow` for independent evidence-based finding decisions.
 
-The genius-tier agents reference roles (`@plan`, `@slow`) in their frontmatter, so retuning the anchored genius list in `modelRoles` moves all of them at once. The reviewers and every read-only investigator can spawn `david-research` to offload external docs and API lookups instead of burning their own context on the internet. The exact model strings live in the `modelRoles` config and in each agent's frontmatter, and both are tunable. See [Configuration](/docs/reference/configuration).
+OMP supplies `scout`, `reviewer`, `security-reviewer`, `task`, and `sonic`. Supership reuses their existing bodies with explicit per-invocation assignments and strict schemas. It does not install duplicate planner or task definitions.
 
-## Project agents
+## Seat resolution
 
-A repo can vendor its own specialists in `.omp/agents/*.md`. The pipeline discovers them at plan time, adds them to the plan schema's agent choices, and lists each one with its description in the plan prompt, so the planner assigns pieces to them when the work falls squarely in their documented domain. Each runs with its own frontmatter model, skills, and spawn whitelist. Kit personas are excluded from discovery, and a repo without `.omp/agents` gets the base choices unchanged. Project agents do not join the task pool rotation.
+A logical seat records its base agent, model assignment, source, and declared fallbacks, alternatives after failure. OMP resolves each exact agent name in this order:
 
-## Bundled omp scouts
+1. Project agents take precedence.
+2. User agents come next.
+3. Extension-package agents follow.
+4. Bundled agents come last.
 
-The planner and the genius agents also spawn omp's own bundled scouts, which are not part of this kit: `scout` (read-only local codebase scout; named `explore` before omp 17) and `librarian` (library and API source). Both run on the cheap `smol` role. These keep fact-finding off the expensive genius reasoning.
+Source mappings must identify explicit roots that discovery cannot otherwise find. The engine must not silently replace an unavailable specialist with a bundled definition.
 
-> [!NOTE]
-> Agent selection is an invariant, not a preference. Plan and consult go to `planner`, hard diagnosis to `deep-debugger`, review to `deep-reviewer`, always via an explicit `agent=`. Persona text in the prompt never substitutes for `agent=` (omp ≥17 removed the task tool's old `role=` field outright). See [Resume and recovery](/docs/guides/resume-and-recovery) for why this matters.
+Model selection uses OMP frontmatter, metadata at the start of an agent file. It also uses role aliases, `task.agentModelOverrides`, and explicit seat assignments within a run. An alias provides an alternative model name.
+
+Package definitions contain no provider/model IDs. Overrides within one run do not change global configuration or sibling sessions.
+
+## Output and permissions
+
+The runtime provides a strict versioned schema for each task. Submit the final result with native top-level yield according to the shown tool schema. On OMP 18.1.10, an eval-bridged yield cannot finalize a child. Eval means code evaluation within a persistent session.
+
+Free prose, Markdown outside declared fields, or fenced JSON cannot replace a valid result.
+
+Personas cannot approve their own work, change engine state, or register worker-owned dynamic tools. They can propose tools for review by the orchestrator, the agent that coordinates work.
+
+Granted callbacks, functions that another task invokes, operate in the parent kernel, the persistent JavaScript environment. This applies even when the worker uses a worktree, a separate repository working copy.
+
+## Discovery and preserved legacy sources
+
+OMP 18.1.10 scans `<package-root>/agents/*.md`. The `omp` package manifest has an `extensions` field but no agent-path field. A manifest declares package resources. Root `agents/` therefore contains the only authored roster. No wildcard points at `omp/agents`.
+
+The old `omp/agents`, `omp/commands`, `omp/templates`, and `omp/APPEND_SYSTEM.md` remain preserved source until approved migration. The package does not register them.
+
+Existing installed copies can still take precedence over commands until approved migration removes their active ownership. Do not copy the legacy tree into a new installation.
+
+A linked canonical checkout, the primary repository copy, can expose unchanged root `skills/ax` and `skills/grill` through OMP resource discovery. The package file list does not restrict a live symlink, a pointer to another filesystem location.
+
+These optional skills do not add command owners or persona bodies. The installer does not copy them into shared user directories.

@@ -1,36 +1,27 @@
 ---
 title: Frontend and design
 order: 2
-description: The Designer Agent and Routing
+description: UI assignments and verification against the actual interface.
 ---
 
 # Frontend and design
 
-Anything user-facing routes through the `designer` agent, omp's UI/UX specialist (model `@designer`), instead of the generic `task` worker. The designer is design-system-first and accessibility-aware, and it handles frontend end to end: build, review, and fix. There is no new config; this reuses the existing `modelRoles.designer` chain.
+A plan names the UI work, expected paths, repository conventions, and required checks. UI means user interface.
 
-## Build
+The package reuses OMP workers and available user-configured specialists. It does not install a duplicate designer persona, reusable agent instructions, or fix a model provider. A provider supplies model responses.
 
-The planner tags any piece whose primary deliverable is UI as `agent="designer"` (building frontend from scratch, modifying it, or improving it). The build wave dispatches those pieces to the designer, with no pooling. Backend, API, and data pieces stay `task`. This is a semantic call the planner makes at plan time. See [Planning](/docs/pipeline/planning).
+Substantial UI and backend work can use separate items after their dependencies finish, if their write paths do not overlap. Backend work changes server behavior. Shared or dependent edits proceed sequentially.
 
-## Review
+A specialist must resolve before the phase. If that specialist fails, the engine does not silently substitute a weaker seat, an assignment of an agent and model.
 
-When the change touched frontend, the review loop adds a **design lens**.
+UI risk activates the UI review lens, a specific review topic, alongside mandatory correctness and simplicity. Review covers applicable behavior, layout, keyboard access, accessible names, and failure states. Accessible names identify controls for assistive tools. Ultra retains those reviewers and adds two independent judges.
 
-- On a normal run, the design lens is reviewed by the designer (it does not consume a reviewer-model slot, which keeps the diversity alternation stable).
-- On an ultra run, the design rubric is folded into the `plato` and `aristotle` duel instead of spawning a third reviewer.
+## Verification
 
-## Fix
+Exercise the actual browser, TUI, or CLI that changed. TUI means terminal user interface. CLI means command-line interface. Record the scenario, outcome, relevant screenshot or artifact, and code version. An artifact retains work evidence.
 
-Review fixes on a frontend file are dispatched to the designer, not the task pool, so the agent correcting UI findings has design instincts too. If the designer fix errors, it falls back to the task pool.
+A compilation result does not prove that a user can complete the flow. Compilation translates source code into executable form.
 
-## is_frontend detection
+Use the existing repository design system. Operate the repository scripts to make sure that the requirements pass. Do not add a web framework, documentation framework, or generic test stack to provide a workflow dashboard. If the runtime cannot exercise the interface, record that limitation. Do not claim visual verification.
 
-Build routing is the planner's semantic call. Review and fix routing is mechanical, because after the fact the only signal available is the file path. The `is_frontend(path)` check matches a known UI extension or a UI-ish path segment.
-
-- **Extensions:** `.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.css`, `.scss`, `.sass`, `.less`, `.html`, `.htm`, `.mdx`.
-- **Path segments:** `components`, `component`, `styles`, `style`, `ui`, `pages`, `views`, `layouts`.
-
-The check is approximate and tunable. A `.ts` file full of DOM logic will not match, which is an accepted tradeoff. `/superreview` uses the same `is_frontend` signal over its diff.
-
-> [!NOTE]
-> Two detection paths, split by where they happen. Build routing is the planner's call, encoded in the piece `agent`. Review and fix routing is the mechanical `is_frontend(path)` glob. Both send frontend work to the same designer.
+The Supership HTML dashboard is read-only. It has no approval buttons or editable authoritative state. It does not automatically evaluate stored code. Trusted OMP TUI controls handle all decisions that change state.

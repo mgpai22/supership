@@ -1,44 +1,32 @@
 ---
 title: Standalone review
 order: 1
-description: Standalone Always-ultra Review
+description: Local review and fixes with two independent judges.
 ---
 
 # Standalone review
 
-`/supership` reviews as the last stage of a full plan-build-review run. `/superreview` peels that review stage off into a standalone command you point at any local changes: a diff you wrote by hand, or the output of a previous supership run you want a second, harder pass on.
+`/superreview` uses the shared review/fix engine against local changes. It always uses ultra review with risk-selected reviewers and two independent judges. It skips the normal plan/build interview. It retains safety approvals, disagreement pauses, and recovery decisions.
 
-It runs the **exact same engine**, the shared `run_review_loop()`, seeded with a review-only state and no plan or build. There is no clarify and no approval gate.
-
+```text
+/superreview [--base <ref>] [--slug <slug>] [free-text intent]
+/superreview resume [slug]
 ```
-/superreview [--base <ref>] [--slug <slug>] [free-text intent...]
-```
 
-## Always ultra
+## Scope
 
-`/superreview` is always the `plato` and `aristotle` genius duel. There is no normal-tier or lite mode; that is `/supership`'s inline review. The seats are resolved live from config at review start (there is no plan to freeze them) and frozen into this run's state, and the run loud-fails if either seat is unset. It reuses the `plato` and `aristotle` keys, so there is no new config.
+An explicit `--base` determines the review scope. Otherwise, dirty tracked, staged, and untracked changes form the review target. Dirty tracked files contain uncommitted changes. Staged changes belong to the next proposed commit. Untracked files have no Git record.
 
-## Diff-target detection
+On a clean checkout, the engine makes sure that it can establish the default-branch merge base. The merge base is the shared ancestor with that branch. The engine uses it as the review target.
 
-The command decides what to review before authoring the cell, in this order.
+If the repository has no meaningful base, the run reports an empty or ambiguous scope. Examples include a first commit or missing refs, names that identify Git objects. The engine does not fabricate `HEAD~1`. Review rounds retain the chosen scope so fixes do not shift the target.
 
-1. It must be a git repo, or there is nothing to review.
-2. If `--base <ref>` was given, review the range since that ref.
-3. Otherwise, if the working tree is dirty (any uncommitted or untracked files), review the working tree. This is the "I just made changes" or "I just ran supership" case.
-4. Otherwise (clean tree), review the current branch against its merge-base with the default branch. The default branch is the basename of `origin/HEAD` (falling back to `main`, then `master`, then `HEAD~1`).
+The free-text intent explains the required behavior and exclusions. Review-only records which existing changes it can fix. Those changes remain user-owned for staging and publication. Permission to repair a defect does not authorize commits of all pre-existing content.
 
-Re-review always diffs the same fixed base, so fixes accumulate across rounds rather than shifting the target under you.
+## Findings and recovery
 
-## Intent
+The run records review rounds, both judge decisions, findings, fixes, and verification in versioned state and events. Verification establishes whether requirements pass. `plan.html` shows these records read-only.
 
-The free-text argument is what the change is meant to do, plus any scope or non-goals (for example, "tightening the auth refactor; ignore vendored/"). Omit it and the reviewers infer intent from the diff plus recent commit messages. There is no plan to anchor scope, so reviewers lean toward defects in what changed.
+Resume reconciles owners and effects before new work. Reconciliation compares recorded and observed work.
 
-## Dashboard and resume
-
-`/superreview` writes a `.planning/review-<MMDD-HHMM>/plan.html` dashboard (override the slug with `--slug`), the same live UX as the pipeline: rounds, findings, and verdicts. It fixes on the shared tree (the full review, fix, and re-verify loop, not just a report). It is resumable via `/superreview resume`, which re-enters the loop against the original base, continues the round count from the file, and preserves fixes already applied.
-
-Because it shares `run_review_loop()` with the pipeline, the frontend design lens and the `is_frontend` fix routing apply here too. See [Frontend and design](/docs/guides/frontend-and-design).
-
-## Local only
-
-`/superreview` reviews the local working tree only. There is no PR or GitHub integration. For GitHub PR review, use the built-in `/code-review` or `/review`.
+This command reviews local changes only. It does not fetch pull requests, open pull requests, or publish review comments. See [Review](/docs/pipeline/review) for stalls, round limits, and completion rules.

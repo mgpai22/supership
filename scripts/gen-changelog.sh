@@ -15,10 +15,10 @@ entries="$(gh pr list --repo "$REPO" --state merged --limit 300 \
   --jq 'sort_by(.mergedAt) | reverse | .[] | "- [#\(.number)](\(.url)) \(.title) (\(.mergedAt[0:10]))"' \
   | esc)"
 
+intro="$(sed '/^## Merged history$/,$d' "$OUT")"
 {
-  printf -- '---\ntitle: Changelog\norder: 1\ndescription: Merged Changes\n---\n\n'
-  printf -- '# Changelog\n\n'
-  printf -- 'Every merged pull request, newest first. Regenerated from GitHub on each deploy, so it always reflects what shipped.\n\n'
+  printf -- '%s\n\n' "$intro"
+  printf -- '## Merged history\n\n'
   if [ -n "$entries" ]; then printf -- '%s\n' "$entries"; else printf -- '_No merged pull requests yet._\n'; fi
 } > "$OUT"
 

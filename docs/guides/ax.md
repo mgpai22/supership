@@ -1,37 +1,23 @@
 ---
 title: ax web fetch
 order: 5
-description: The Web Fetch and Extract CLI
+description: Optional web tools stay under user control.
 ---
 
 # ax web fetch
 
-`ax` is the AI-era curl. It fetches a URL, discovers page structure, and extracts rows or tables in one command.
+`ax` is an optional tool that retrieves web pages and extracts content. Supership does not require it during operation.
 
-## Why the kit ships it
+The managed installer no longer downloads it or changes `~/.local/bin`. It does not install shared skills or modify other harnesses, applications that host coding agents.
 
-Agents reach for `curl` and get nothing back on an empty body. Or they dump raw HTML into context and blow the token budget. Or they hand-roll regex over markup that breaks on the next page. `ax` replaces all three. It returns structured status and body, never goes silent, and caps output at 50 rows by default so a page cannot flood the window. The kit ships a matching `ax` skill so every agent knows the discover-then-extract workflow.
+Existing `skills/ax` and other legacy payload sources remain preserved until approved migration. Their presence does not authorize copies into user discovery paths, locations that OMP searches for resources. The new package does not require them as workflow tools.
 
-## Cheatsheet
+Scouts, agents that collect evidence, can use available approved web tools for cited research. Pages that use JavaScript or require authentication need an appropriate browser session. For local source inspection, use local tools instead of a website.
 
-```sh
-ax https://api.site.example/users                 # {status, ok, ms, headers, body}
-ax https://api.site.example/x -H 'authorization: Bearer k' -X POST -d '{"a":1}'
-ax https://site.example --outline                 # discover repeating structures
-ax https://site.example --locate 'some text'      # find which selector holds text
-ax https://site.example '.card' --count           # confirm a hypothesis
-ax https://site.example '.card' --row 'title=a, href=a@href'
-ax https://site.example 'table' --table --where 'Stars >= 30000'
-ax https://docs.site.example/guide --md --budget 800
-```
+Keep credentials out of prompts, command examples, artifacts, and exports. Artifacts retain work evidence. The offline automated suite must not fetch real websites or call external models.
 
-Fetch or `--outline` once, `--locate` or `--count` to confirm, then one `--row` or `--table` call. Repeat fetches of the same URL are cached for about two minutes, so probing is cheap. Every extraction prints `N rows extracted` on stderr, which is the verification.
+Browser or web-tool availability does not alter Supership approval requirements. It does not change parent-access rules, which permit granted tools to affect the parent environment.
 
-## Install
+A linked canonical checkout, the primary repository copy, can expose unchanged root `skills/ax` and `skills/grill` through OMP resource discovery. The package file list does not restrict a live symlink, a pointer to another filesystem location.
 
-`ax` is pinned to v0.1.5 and vendored next to the skill so the agent instructions match the binary. `install.sh` installs it automatically into `~/.local/bin` (override with `AX_INSTALL_DIR`), verifies the download against the published sha256 checksum, and skips when `ax` is already present. If you already had a different `ax` version installed, the installer keeps yours, so the skill-matches-binary guarantee only holds for the auto-installed pin. To install by hand, run `curl -fsSL https://ax.yusuke.run/install | sh`.
-
-## When not to use it
-
-- JS-rendered SPAs. If `ax` reports a likely SPA, the data is not in the raw HTML, so switch to the browser tool.
-- Local files and non-web work. Use your normal read and search tools.
+These optional skills do not add command owners or persona bodies, reusable agent instructions. The installer does not copy them into shared user directories.

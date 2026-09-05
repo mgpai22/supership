@@ -1,39 +1,27 @@
 ---
 title: Load balancing
 order: 3
-description: The Task Pool and Health Checks
+description: Logical seats, explicit fallback, and run limits.
 ---
 
 # Load balancing
 
-omp's `modelRoles` chains are fallback-only. The first resolvable model always wins, there is no native rotation, and a provider's in-flight cap queues work rather than spilling it to another provider. So the pipeline load-balances plain `task` spawns itself, across models and subscriptions, via `agent(model=...)`.
+OMP resolves models from agent definitions, role aliases, and `task.agentModelOverrides`. An alias provides an alternative model name. Supership records logical seats, assignments of agents and models. Overrides within one run do not change global configuration or sibling sessions.
 
-This covers plain `task` builders, fixers, and review verifiers. **Genius agents never pool.** The planner, deep-debugger, and the ultra seats always run their own explicit chains.
+A `modelRoles` list defines an ordered model selection sequence. It does not distribute requests in rotation. It does not guarantee that a model request succeeds. If a provider fails, an explicitly configured fallback policy determines the alternative. A provider supplies model responses.
 
-## Task pool
+The old task-pool rotation, usage-database scraping, and per-call model argument on `agent()` are not part of this package. Supership does not read private OMP account tables to guess provider health.
 
-The pool is configured, not a cell constant. It comes from `modelRoles.taskpool`.
+## Independent seats
 
-- Entries are single model patterns.
-- Weight an entry by repeating it in the list.
-- `taskpool: []` **disables** pooling, so spawns run with `model=None`.
-- Omitting the key falls back to the shipped default trio.
+Concurrent reviewers can use distinct seats and model assignments. Ultra requires both planning seats and both judge seats. Missing agents/models block the phase. The engine does not silently choose a default model or drop a reviewer.
 
-## Round-robin
+The engine retains source and model origins for recovery. A declared fallback differs from an undeclared model switch. Invalid structured output receives one same-seat correction and one configured fallback attempt. Unresolved output blocks the action.
 
-Routing is deterministic by piece order (which is what makes it resume-safe). Each spawn picks a pool entry by a stable index derived from the piece id or its position, then walks forward past any unhealthy entry.
+## Limits
 
-## Health checks
+Live OMP concurrency, the number of simultaneous tasks, is the ceiling. A run can specify a lower ceiling. Supership does not raise the global OMP limit. WorkPool schedules repeated independent items. It does not rotate models.
 
-Routing is subscription-aware in two layers, both reading omp's own durable usage ledger at `~/.omp/agent/agent.db` (the same data `omp usage` shows).
+No new finite token, cost, wall-time, or review-round cap applies by default. Tokens are units of model input and output. Wall-time is elapsed clock time.
 
-**Proactive.** Before each spawn, the pipeline reads the ledger (`usage_history` for the used-fraction and status per limit window, plus `auth_credential_blocks`) and walks past any pool entry whose subscription is exhausted (at or above `POOL_FULL`, default 0.95) or whose credentials are all blocked. Model-class-scoped limits are respected, so an exhausted `anthropic:7d:fable` window does not gate a sonnet spawn. The check is **fail-open**. If the ledger cannot be read, the entry counts as healthy.
-
-**Reactive.** If a spawn dies with a usage-limit, quota, or auth-exhaustion error (omp gives up after at most three fast internal same-provider retries), the pipeline re-dispatches that piece once on the other provider and skip-lists the failed provider for 30 minutes, so subsequent pieces route away proactively. Ordinary task failures never trigger cross-provider fallback.
-
-## Multiple accounts
-
-Several Claude Max or Codex logins compose cleanly. omp natively hash-sticks each subagent session to one account and rotates off blocked or exhausted siblings, so intra-provider spreading is automatic. The proactive check evaluates the ledger per account and only marks a provider unhealthy when every account is drained or credential-blocked. One healthy Max account keeps the whole anthropic pool entry usable.
-
-> [!NOTE]
-> `taskpool` is a **pool** (round-robin plus health checks), which is a different thing from a fallback chain (first resolvable wins) or the `reviewers` **diversity set** (entries alternate across lenses). See [Configuration](/docs/reference/configuration).
+Interactive planning asks about unspecified limits. Autonomous runs use configured defaults. Work pauses when it reaches a limit. Unknown pricing stays unknown. Active provider requests can exceed a measured budget before the next observable boundary.

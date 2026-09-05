@@ -1,46 +1,43 @@
 ---
 title: Execution
 order: 3
-description: Build Waves and Escalation
+description: Dependency-safe work and strict results.
 ---
 
 # Execution
 
-Cell 2 executes the plan. The wave shape comes from the plan's `mode` and `overlap`. Execution is resume-safe and only touches pieces whose status is not already `done`.
+The engine starts work only after its dependencies finish under the current plan revision. Each assignment names its seat, paths, expected output, prior evidence, tool grants, and verification. A seat assigns an agent and model. A grant authorizes access to a tool. Verification establishes whether requirements pass.
 
-## Build waves
+Independent items can proceed concurrently within the live OMP ceiling and any lower run ceiling.
 
-**Sequential.** When the plan is `sequential` (or only one piece is left to do), one worker builds the pieces in order on the shared working tree, no isolation.
+Overlapping edits never proceed concurrently. Separate working copies can isolate independent builders. Isolation cannot make competing writes safe to merge. Before integration, the combination of changes, the engine makes sure that the baseline and external changes permit safe updates. The baseline records the starting repository state.
 
-**Disjoint parallel.** When the plan is `parallel` with `overlap=false`, the pieces touch disjoint files, so they run concurrently on the shared tree directly. There is no race because no two pieces edit the same files.
+## Task and eval contracts
 
-**Overlapping parallel.** When the plan is `parallel` with `overlap=true`, the pieces may edit the same files. Each builds in an isolated git worktree in patch mode (`merge=false`, `apply=false`, `handle=true`) so its edits stay in the worktree and never apply concurrently. The pipeline collects each piece's patch, then a serial **Synthesize** step applies and reconciles the patches in order, resolving conflicts, and builds or lints to confirm it compiles.
+The main session controls finite task or agent groups. Current JavaScript helpers return promises, references to future results.
 
-> [!NOTE]
-> If isolation is unavailable (not a git repo, or omp's isolation mode is off) or an isolated build raises, that piece falls back to a sequential build on the shared tree, where the full stuck contract still applies.
+Await `agent()` to obtain its handle, a reference to active work. Then await `handle.wait()` or `wait(handles)` for results.
 
-Dashboard writes happen at the driver level, between and after waves, never from inside a `parallel()` thunk. Concurrent writes would race and drop sibling updates.
+For repeated independent items within one scope, use WorkPool. WorkPool schedules tasks. It does not store durable state, records that survive process loss.
 
-## Stuck contract
+Product control cells, managed blocks of code, carry action identities and report receipts, records of observed results. The engine makes sure that each action identity matches the current work. Do not replace them with a manually written driver.
 
-A builder that hits a wall does not thrash and does not spawn a debugger itself. It stops, leaves its work in place, and returns `status="stuck"` with a `kind` (`bug` or `design`), what it `tried` (including the exact error), and the precise `question` to escalate.
+Supership does not depend on removed Python coordination helpers. It does not use per-call model parameters on `agent()`.
 
-## Escalation
+The invocation supplies a strict output schema, the required result structure. Workers finalize with the native OMP top-level yield tool according to its shown schema. On OMP 18.1.10, a nested eval-bridged yield does not finalize the child. Eval means code evaluation within a persistent session.
 
-The pipeline reads the stuck signal and consults the right specialist, at depth 1 so the consultant keeps its own scouts.
+Prose and fenced JSON do not substitute for a valid terminal result.
 
-- **kind = design** goes to the architect, the `planner` in CONSULT mode. On an ultra run this is re-adjudicated by the challenger (`aristotle`) instead, since the model that red-teamed the plan is best placed to reopen it.
-- **kind = bug** goes to `deep-debugger` for root-cause diagnosis.
+## Failure and evidence
 
-## Guided retry
+An invalid result receives one correction attempt on the same seat. It then receives one configured fallback attempt, an alternative after failure. Failure after that blocks the action. The engine does not accept unstructured prose instead.
 
-After a consult, the builder is re-dispatched **once** with the guidance folded into its prompt (labeled `build:<id>:retry`). If it comes back done, the piece is done. If it is still stuck, the piece is surfaced as unresolved in the dashboard rather than looping forever.
+Before another attempt, reconcile effects by comparing recorded and observed work. A builder can change files even if its result is invalid or missing. Before an adopt/retry/discard decision, inspect its worktree, patches, receipts, and artifacts. A worktree is a separate repository working copy. Artifacts retain work evidence.
 
-## salvage_yield
+A worker assertion that checks passed is not sufficient evidence. Record the actual command, result, applicable output or artifact, and the code version that the command covers. No universal test command replaces the repository instructions.
 
-omp hard-aborts a subagent at 1.5x `task.softRequestBudget`. That abort can land after the child finished its work but before its final yield was recorded, which would misfile a finished piece as an error.
+## Parent access
 
-Before writing a piece off, `run_build` calls `salvage_yield`, which reads the child's transcript, finds the final `yield` tool call, and recovers its result. If that recovered result says `status="done"`, the piece is marked done (tagged as salvaged) rather than lost. Raising `task.softRequestBudget` is what actually prevents the kill. See [Resume and recovery](/docs/guides/resume-and-recovery).
+Only the orchestrator, the agent that coordinates work, registers dynamic tools. A granted callback, a function that another task invokes, operates in the parent JavaScript kernel, the persistent JavaScript environment. This applies even when its caller has an isolated worktree.
 
-> [!TIP]
-> When a piece dies to a subscription limit rather than a budget kill, the build also flips to the other pool provider and re-dispatches the piece once there. See [Load balancing](/docs/guides/load-balancing).
+Label this as worktree isolation with parent access. The captured child patch excludes parent writes. Those writes need separate ownership evidence and review.

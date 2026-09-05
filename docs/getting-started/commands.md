@@ -1,26 +1,46 @@
 ---
 title: Commands
 order: 3
-description: Every command and its one-line behavior.
+description: Five command names use one engine.
 ---
 
 # Commands
 
 | Command | Behavior |
 |---|---|
-| `/supership <task>` | Interactive. Clarify interview, plan, approval gate, build, review loop, consolidate. |
-| `/shipit <task>` | Autonomous. The same pipeline with no interview and no gate, run end to end. |
-| `/ultraship [topo] <task>` | Interactive, dual-genius. Two genius seats (`plato` + `aristotle`) debate the plan and review genius-tier. |
-| `/ultrashipit [topo] <task>` | Autonomous dual-genius. Same two-planner front end, no interview, no gate. |
-| `/superreview [--base <ref>] [intent]` | Standalone genius review-and-fix loop over your current local changes. |
-| `<command> resume [slug]` | Re-enter an interrupted run of that command where it left off. |
+| `/supership <task>` | The interactive workflow interviews, researches, plans, builds, reviews, fixes, and establishes whether requirements pass. |
+| `/shipit <task>` | Same execution without the interview or ordinary plan/amendment approval gates. |
+| `/ultraship [topology] <task>` | Interactive flow with two planning seats and two review judges. |
+| `/ultrashipit [topology] <task>` | Autonomous ultra flow with the same review and safety requirements. |
+| `/superreview [--base <ref>] [--slug <slug>] [intent]` | Local-diff review/fix, always ultra, without a normal planning/build interview. |
+| `<command> resume [slug]` | The engine reconciles recorded and observed work before it resumes through trusted OMP controls. |
 
-## Interactive versus auto
+An ultra topology is the order of planning calls. It is `crossreview`, `duel`, or `debate`. The default is `duel`. A first word that is not a topology remains part of the task.
 
-The difference between `/supership` and `/shipit` is exactly two things. `/supership` runs the clarify interview and pauses at an approval gate so you refine the plan before anything builds. `/shipit` skips both, treats your raw request as the spec, and runs to completion. Everything after the gate (build, review, consolidate) is identical code. The ultra pair maps the same way, `/ultraship` interactive and `/ultrashipit` autonomous.
+## Autonomous does not mean unapproved effects
 
-The optional topology word (`crossreview`, `duel`, or `debate`) is the first argument to the ultra commands. If the first word is not one of those, the topology defaults to `duel` and the whole argument string is the task. See [Planning topologies](/docs/ultra/planning-topologies).
+Interactive users approve plans and material amendments through the OMP TUI, a terminal user interface. Autonomous runs record ordinary plan and amendment decisions without those approval steps.
+
+Both modes pause for these conditions:
+
+- Judges disagree.
+- Work stalls.
+- Work reaches a limit.
+- Ownership is unsafe.
+- Recovery remains unresolved.
+
+Destructive, public, credential, and production actions retain OMP approvals in every mode. Commit and push are opt-in. Push needs a final confirmation that shows the remote, branch, and exact commits.
+
+Supership refuses startup in OMP Plan Mode and supports Code Mode. One OMP session can own one active run. Separate sessions can own separate runs in the same repository, subject to locks and write-conflict checks.
 
 ## Resume
 
-Every command accepts `resume`. Given a slug it uses that run; otherwise it picks the newest `.planning/` dashboard whose status is not `done` or `failed` and re-enters at the right stage based on the stored status. Resume skips pieces already built and continues the review-round count from the file, so it recovers rather than redoes. See [Resume and recovery](/docs/guides/resume-and-recovery).
+Resume reads `state.json` and `events.jsonl`. It reconciles active owners and observed results before new work. A process-local handle, a reference valid within one process, does not prove completion. Neither does the HTML dashboard.
+
+If recovery is ambiguous, the user must decide through the TUI. Old HTML-only runs remain readable but cannot resume.
+
+## Optional invocation flags
+
+`--base`, `--slug`, `--branch`, `--commit`, `--push`, and `--topology` select scope and output choices. `--resume [slug]` also requests resume.
+
+For an explicit model assignment within one run, use `--seat seat=model`. For limits, use `--concurrency`, `--tokens`, `--cost`, `--wall-ms`, or `--review-rounds`. No flag bypasses a required safety or recovery decision.

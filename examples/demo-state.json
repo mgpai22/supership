@@ -1,0 +1,599 @@
+{
+  "schemaVersion": 1,
+  "patches": [],
+  "pools": [],
+  "toolInvocations": [],
+  "worktrees": [],
+  "gitOutcomes": [],
+  "runId": "run-dashboard-fixture",
+  "slug": "dashboard-fixture",
+  "owner": {
+    "sessionId": "fixture-session",
+    "epoch": 2,
+    "leaseId": "fixture-lease"
+  },
+  "repository": {
+    "root": "/fixture/repo",
+    "gitDir": "/fixture/repo/.git",
+    "commonDir": "/fixture/repo/.git",
+    "initialHead": "fixture-head",
+    "baselineRef": {
+      "id": "baseline",
+      "kind": "artifact",
+      "uri": "artifact://baseline",
+      "mediaType": "text/plain",
+      "summary": "Baseline captured",
+      "availability": "available",
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "baselineDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "invocation": {
+    "command": "ultraship",
+    "mode": "interactive",
+    "topology": "duel",
+    "intent": "Illustrative offline dashboard fixture; no real rollout proof",
+    "commitRequested": false,
+    "pushRequested": false
+  },
+  "policy": {
+    "schemaVersion": 1,
+    "seats": [],
+    "namedFallbackSeats": [],
+    "limits": {},
+    "requiredLenses": [],
+    "verificationChecks": [],
+    "phaseGates": [],
+    "pathRouting": [],
+    "instructionRefs": []
+  },
+  "phase": "review",
+  "lifecycle": "paused",
+  "planRevision": 1,
+  "eventSequence": 12,
+  "lastEventHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "createdAt": 1788479940000,
+  "updatedAt": 1788480000000,
+  "seats": [
+    {
+      "seatId": "builder",
+      "baseAgent": "task",
+      "alias": "fixture-builder",
+      "resolvedModel": "fixture/model",
+      "fallbackSeatIds": [],
+      "bindingGeneration": 1,
+      "source": {
+        "agentName": "task",
+        "kind": "bundled",
+        "path": "fixture/task.md",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bodyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "metadataHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ],
+  "limits": {
+    "concurrency": 2,
+    "tokens": 10000
+  },
+  "usage": {
+    "tokens": 12000,
+    "cost": {
+      "amount": null,
+      "pricedSubtotal": 0,
+      "currency": "USD",
+      "unpricedModels": [
+        "fixture/model"
+      ]
+    },
+    "startedAt": 1788479940000,
+    "observedAt": 1788480000000,
+    "activeOwners": 1,
+    "ompConcurrencyCeiling": 4,
+    "overshoot": {
+      "tokens": 2000,
+      "cost": null,
+      "wallMs": 0
+    }
+  },
+  "usageSources": [{ "id": "fixture-display", "complete": false, "tokens": 12000, "costAmount": null, "model": "fixture/model", "observedAt": 1788480000000 }],
+  "usageCoverage": [],
+  "plan": {
+    "schemaVersion": 1,
+    "revision": 1,
+    "title": "Illustrative paused run",
+    "objective": "Illustrative fixture only. Final product acceptance and real rollout remain pending. Show decisions without granting approvals.",
+    "scope": {
+      "included": [
+        "Generated HTML"
+      ],
+      "excluded": [
+        "Approval endpoints"
+      ],
+      "paths": [
+        "src/view.ts"
+      ],
+      "effects": [
+        "Repository writes"
+      ],
+      "publicContracts": [
+        "Read-only rendering"
+      ],
+      "dependencies": []
+    },
+    "evidence": [
+      {
+        "id": "baseline",
+        "kind": "artifact",
+        "uri": "artifact://baseline",
+        "mediaType": "text/plain",
+        "summary": "Baseline captured",
+        "availability": "available",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "items": [
+      {
+        "id": "build-ui",
+        "revision": 1,
+        "kind": "build",
+        "dependencies": [],
+        "seatId": "builder",
+        "expectedPaths": [
+          "src/view.ts"
+        ],
+        "expectedOutputs": [
+          "Read-only status view"
+        ],
+        "verificationCheckIds": [
+          "check-view"
+        ],
+        "mutation": "repository",
+        "isolation": {
+          "kind": "worktree",
+          "base": {
+            "head": "fixture-head",
+            "indexTree": "fixture-index",
+            "worktreeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "scopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "parentEffectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "toolGrants": [
+          {
+            "name": "inspect-parent",
+            "version": 1,
+            "approvalId": "approval-tool"
+          }
+        ],
+        "outputSchema": {
+          "name": "build",
+          "version": 1
+        },
+        "instructions": "Render the current state without controls.",
+        "evidence": [
+          {
+            "id": "baseline",
+            "kind": "artifact",
+            "uri": "artifact://baseline",
+            "mediaType": "text/plain",
+            "summary": "Baseline captured",
+            "availability": "available",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "id": "html-injection",
+        "kind": "security",
+        "description": "Model text must stay inert.",
+        "paths": [
+          "src/view.ts"
+        ],
+        "requiredLenses": [
+          "security"
+        ],
+        "verificationCheckIds": [
+          "check-view"
+        ],
+        "evidence": [
+          {
+            "id": "baseline",
+            "kind": "artifact",
+            "uri": "artifact://baseline",
+            "mediaType": "text/plain",
+            "summary": "Baseline captured",
+            "availability": "available",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ],
+    "requiredLenses": [
+      "correctness",
+      "simplicity",
+      "security"
+    ],
+    "verificationChecks": [
+      {
+        "id": "check-view",
+        "description": "Open the generated view",
+        "scenario": {
+          "kind": "structured",
+          "name": "Dashboard smoke",
+          "steps": [
+            "Load file",
+            "Inspect read-only state"
+          ],
+          "operations": [
+            { "kind": "browser-open", "name": "dashboard", "url": "file:///fixture/repo/plan.html" },
+            { "kind": "browser-assert-text", "name": "dashboard", "text": "Read-only dashboard" },
+            { "kind": "browser-screenshot", "name": "dashboard" },
+            { "kind": "browser-close", "name": "dashboard" }
+          ]
+        },
+        "scopePaths": [
+          "src/view.ts"
+        ],
+        "required": true,
+        "source": [
+          {
+            "id": "baseline",
+            "kind": "artifact",
+            "uri": "artifact://baseline",
+            "mediaType": "text/plain",
+            "summary": "Baseline captured",
+            "availability": "available",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ],
+    "commitGroups": [],
+    "toolProposals": []
+  },
+  "work": [
+    {
+      "schemaVersion": 1,
+      "id": "build-ui",
+      "revision": 1,
+      "kind": "build",
+      "dependencies": [],
+      "seatId": "builder",
+      "expectedPaths": [
+        "src/view.ts"
+      ],
+      "expectedOutputs": [
+        "Read-only status view"
+      ],
+      "verificationCheckIds": [
+        "check-view"
+      ],
+      "mutation": "repository",
+      "isolation": {
+        "kind": "worktree",
+        "base": {
+          "head": "fixture-head",
+          "indexTree": "fixture-index",
+          "worktreeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "scopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parentEffectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "toolGrants": [
+        {
+          "name": "inspect-parent",
+          "version": 1,
+          "approvalId": "approval-tool"
+        }
+      ],
+      "outputSchema": {
+        "name": "build",
+        "version": 1
+      },
+      "instructions": "Render the current state without controls.",
+      "evidence": [
+        {
+          "id": "baseline",
+          "kind": "artifact",
+          "uri": "artifact://baseline",
+          "mediaType": "text/plain",
+          "summary": "Baseline captured",
+          "availability": "available",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "status": "awaiting-recovery",
+      "attempt": {
+        "id": "attempt-one",
+        "number": 1,
+        "validationStage": "initial",
+        "seatId": "builder"
+      },
+      "runtimeOwners": []
+    }
+  ],
+  "actions": [],
+  "tools": [
+    {
+      "schemaVersion": 1,
+      "name": "inspect-parent",
+      "description": "Read parent metadata",
+      "purpose": "Show callback access",
+      "sourceRef": {
+        "id": "tool-source",
+        "kind": "artifact",
+        "uri": "artifact://baseline",
+        "mediaType": "text/plain",
+        "summary": "Baseline captured",
+        "availability": "available",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "schemaHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "initialization": [],
+      "effects": {
+        "kind": "read-only",
+        "paths": [],
+        "description": "Read parent state"
+      },
+      "intendedUsers": [
+        "builder"
+      ],
+      "recreation": "recreatable",
+      "version": 1,
+      "grants": [
+        {
+          "workId": "build-ui",
+          "workRevision": 1,
+          "seatId": "builder"
+        }
+      ],
+      "approvalId": "approval-tool",
+      "approvalScopeHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parent": {
+        "cwd": "/fixture/repo",
+        "sessionId": "fixture-session",
+        "ownerEpoch": 2
+      },
+      "kernelGeneration": 1,
+      "registration": "unavailable",
+      "evidence": [
+        {
+          "id": "baseline",
+          "kind": "artifact",
+          "uri": "artifact://baseline",
+          "mediaType": "text/plain",
+          "summary": "Baseline captured",
+          "availability": "available",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "approvals": [
+    {
+      "id": "approval-tool",
+      "kind": "tool",
+      "decision": "approve",
+      "authority": "omp-tui",
+      "scopeHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "planRevision": 1,
+      "toolVersions": [
+        {
+          "name": "inspect-parent",
+          "version": 1
+        }
+      ],
+      "ownerEpoch": 2,
+      "createdAt": 1788479970000,
+      "rationale": "Approved only for this work item.",
+      "evidence": [
+        {
+          "id": "baseline",
+          "kind": "artifact",
+          "uri": "artifact://baseline",
+          "mediaType": "text/plain",
+          "summary": "Baseline captured",
+          "availability": "available",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "schemaVersion": 1,
+      "id": "finding-html",
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "lens": "security",
+      "location": {
+        "path": "src/view.ts",
+        "startLine": 12
+      },
+      "condition": "Untrusted content reaches the view",
+      "claim": "The view must preserve literal text.",
+      "impact": "Script execution could change the page.",
+      "severity": "high",
+      "evidence": [
+        {
+          "id": "missing-reproduction",
+          "kind": "artifact",
+          "uri": "artifact://expired",
+          "mediaType": "text/plain",
+          "summary": "Reproduction artifact expired",
+          "availability": "unavailable",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "fixTarget": {
+        "path": "src/view.ts",
+        "description": "Escape every data field"
+      },
+      "verdicts": [
+        {
+          "judgeId": "judge-a",
+          "round": 1,
+          "verdict": "accepted",
+          "reason": "Reproduction required",
+          "evidence": [
+            {
+              "id": "missing-reproduction",
+              "kind": "artifact",
+              "uri": "artifact://expired",
+              "mediaType": "text/plain",
+              "summary": "Reproduction artifact expired",
+              "availability": "unavailable",
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "reviewRounds": [
+    {
+      "round": 1,
+      "startedAt": 1788479980000,
+      "completedAt": 1788479990000,
+      "codeIdentity": {
+        "head": "fixture-head",
+        "indexTree": "fixture-index",
+        "worktreeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "scopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parentEffectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "lenses": [
+        "security"
+      ],
+      "reviewerOwners": [],
+      "judgeOwners": [],
+      "priorEvidencePacket": {
+        "id": "baseline",
+        "kind": "artifact",
+        "uri": "artifact://baseline",
+        "mediaType": "text/plain",
+        "summary": "Baseline captured",
+        "availability": "available",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "unresolvedFingerprints": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "relevantCodeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verdictEvidence": [
+        {
+          "id": "missing-reproduction",
+          "kind": "artifact",
+          "uri": "artifact://expired",
+          "mediaType": "text/plain",
+          "summary": "Reproduction artifact expired",
+          "availability": "unavailable",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "schemaVersion": 1,
+      "id": "verification-one",
+      "checkId": "check-view",
+      "scenario": {
+        "kind": "command",
+        "command": [
+          "bun",
+          "run",
+          "smoke"
+        ],
+        "cwd": "/fixture/repo"
+      },
+      "codeIdentity": {
+        "head": "fixture-head",
+        "indexTree": "fixture-index",
+        "worktreeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "scopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parentEffectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "scopePaths": [
+        "src/view.ts"
+      ],
+      "startedAt": 1788479990000,
+      "endedAt": 1788479991000,
+      "outcome": "unavailable",
+      "evidence": [
+        {
+          "id": "missing-reproduction",
+          "kind": "artifact",
+          "uri": "artifact://expired",
+          "mediaType": "text/plain",
+          "summary": "Reproduction artifact expired",
+          "availability": "unavailable",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "verifier": {
+        "kind": "runtime",
+        "id": "fixture-check"
+      },
+      "actionId": "verify-action"
+    }
+  ],
+  "instructions": [],
+  "evidence": [
+    {
+      "id": "baseline",
+      "kind": "artifact",
+      "uri": "artifact://baseline",
+      "mediaType": "text/plain",
+      "summary": "Baseline captured",
+      "availability": "available",
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "kernelGeneration": 2,
+  "inputReceipts": [],
+  "receiptDigests": [],
+  "recovery": {
+    "scope": "items",
+    "intent": "resume",
+    "primaryReason": "Kernel generation changed",
+    "triggers": [
+      "tool-unavailable",
+      "unpriced-model"
+    ],
+    "affectedWork": [
+      {
+        "id": "build-ui",
+        "revision": 1
+      }
+    ],
+    "unresolvedOwners": [],
+    "resumePhase": "review",
+    "requiredChoices": [
+      "Recreate the approved tool in OMP"
+    ],
+    "evidence": [
+      {
+        "id": "missing-reproduction",
+        "kind": "artifact",
+        "uri": "artifact://expired",
+        "mediaType": "text/plain",
+        "summary": "Reproduction artifact expired",
+        "availability": "unavailable",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  }
+}
