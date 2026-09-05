@@ -33,7 +33,6 @@ The installer does not download `ax`, install shared skills, or apply global mod
 
 ```sh
 bun src/cli.ts migrate --dry-run
-bun src/cli.ts migrate --dry-run --siftly /path/to/siftly/.omp --palmyra /path/to/palmyra/.omp
 ```
 
 The CLI computes its own read-only inventory and plan. Do not use native `omp plugin link` as a dry run. Its dry-run behavior is not a safe substitute for this inventory.
@@ -72,7 +71,7 @@ Original file content and modes remain unchanged until exact approval. Refusal d
 
 `omp/agents/review-orchestrator.md` and `omp/agents/kimi-reviewer.md` are protected user work. Supership preserves their exact source bytes until full-content or diff review and final confirmation. A matching filename does not prove ownership.
 
-Known global, Siftly, and Palmyra installations require inventory and confirmed migration. Existing local rules, independent commands, shell approvals, and unrelated files must remain. A new registration alone does not prove that old commands no longer shadow it.
+Known global and repository installations require inventory and confirmed migration. Existing local rules, independent commands, shell approvals, and unrelated files must remain. A new registration alone does not prove that old commands no longer shadow it.
 
 After a confirmed migration, restart OMP. Operate `doctor`. Make sure that the expected commands and personas own each name. Until each known target passes, do not report installation complete.
 
