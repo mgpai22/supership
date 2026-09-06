@@ -34,7 +34,7 @@ afterAll(() => {
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify({
     kind: "scripted-software-integration", modelJudgmentProven: false,
-    runtime: "Installed OMP 18.1.10, real extension/native task/eval/yield/hooks, inherited deny-network launcher",
+    runtime: "Installed OMP, real extension/native task/eval/yield/hooks, inherited deny-network launcher",
     approvalSurfaces: "installed-tui records actual PTY keys; installed-print never supplies trusted approval",
     scenarios: evidence,
     focusedCoverage: {

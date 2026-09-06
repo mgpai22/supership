@@ -22,6 +22,10 @@ For repeated independent items within one scope, use WorkPool. WorkPool schedule
 
 Product control cells, managed blocks of code, carry action identities and report receipts, records of observed results. The engine makes sure that each action identity matches the current work. Do not replace them with a manually written driver.
 
+Supership first supplies a manifest, a record that identifies the cell and its pages. Retrieve each page with the exact expression that Supership supplies. Join the decoded `code` values in page order without separators. Submit that unchanged cell through JavaScript eval with `timeout: 0`. Page retrieval does not advance work or grant execution permission. This process also supports `--no-session`.
+
+If a page request fails, use `display(await tool.supership_next({}));` to request a new manifest. Do not combine pages from different cells.
+
 Supership does not depend on removed Python coordination helpers. It does not use per-call model parameters on `agent()`.
 
 The invocation supplies a strict output schema, the required result structure. Workers finalize with the native OMP top-level yield tool according to its shown schema. On OMP 18.1.10, a nested eval-bridged yield does not finalize the child. Eval means code evaluation within a persistent session.

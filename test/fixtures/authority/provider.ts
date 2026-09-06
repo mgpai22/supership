@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { receivedControl } from "../../support/control-messages.ts";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
@@ -19,7 +20,6 @@ const spoof = (name: string, args: Record<string, unknown>) => call(name, args, 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const textMessages = (context: Context) => context.messages.map(message => ({ role: message.role, text: typeof message.content === "string" ? message.content : message.content.map(block => "text" in block ? block.text : "").join("\n") }));
 interface Packet { assignment: WorkAssignment; work: WorkRef }
-interface Issued { action?: ActionRecord; cell?: { language: "js"; code: string; timeout: number } }
 
 // Match the complete JSON assignment transport used by the existing acceptance fixture.
 function packetFrom(text: string): Packet | undefined {
@@ -72,7 +72,7 @@ function workerOutput({ assignment, work }: Packet) {
 
 // Non-isolated children rebind this factory and OMP routes every provider request through the latest registration,
 // so the parent's scripted state must be module level, not per instance.
-let lastNext: Issued | undefined, turns = 0, sentConcurrentNext = false, sentTimeoutProbe = false;
+let turns = 0, sentConcurrentNext = false, sentTimeoutProbe = false;
 // proof: the authority attack sequence. crash-after-verify: a plain run killed once a settled verification exists, leaving an active run on disk.
 // resume: a plain continuation until a second verification record exists or the run stops being active.
 const phase = process.env.AUTHORITY_PHASE ?? "proof";
@@ -87,10 +87,6 @@ export default function authorityProvider(api: ExtensionAPI) {
   api.on("tool_execution_start", event => log({ event: "execution-start", id: event.toolCallId, name: event.toolName }));
   api.on("tool_result", (event, ctx) => {
     log({ event: "tool-result", id: event.toolCallId, name: event.toolName, details: event.details, error: event.isError });
-    // Outside Code Mode the host mounts extension tools as xd:// devices; a device write reports the inner result under details.xdev.inner.
-    const xdev = (event.details as { xdev?: { tool?: string; inner?: unknown } } | undefined)?.xdev;
-    if (event.toolName === "supership_next") lastNext = event.details as Issued;
-    else if (event.toolName === "write" && xdev?.tool === "supership_next" && !event.isError) lastNext = xdev.inner as Issued;
     if (event.toolName === "eval") log({ event: "runtime-snapshot", snapshot: ctx.getAsyncJobSnapshot() });
   });
   api.on("message_end", event => {
@@ -110,8 +106,10 @@ export default function authorityProvider(api: ExtensionAPI) {
         }
         const state = stateNow();
         if (!state) throw new Error("The actual product did not create its run");
-        if (++turns > 120) throw new Error("The authority proof did not reach its observed verification boundary");
-        log({ event: "decision", turn: turns, issued: lastNext?.action?.id, cell: !!lastNext?.cell, actions: state.actions.map(action => [action.id, action.status]) });
+        const delivered = receivedControl(context);
+        const lastNext = delivered?.code ? { action: state.actions.find(action => action.programHash === createHash("sha256").update(delivered.code!).digest("hex")), cell: { language: "js" as const, timeout: 0, code: delivered.code } } : undefined;
+        if (++turns > 2000) throw new Error("The authority proof did not reach its observed verification boundary");
+        log({ event: "decision", turn: turns, cellId: delivered?.cellId, issued: lastNext?.action?.id, cell: !!lastNext?.cell, actions: state.actions.map(action => [action.id, action.status]) });
         const settled = state.actions.every(action => !["issued", "claimed", "running", "uncertain"].includes(action.status));
         if (phase === "crash-after-verify" && state.verification.some(record => record.outcome === "passed") && settled) {
           writeFileSync(join(root, "boundary.json"), JSON.stringify(state));
@@ -121,6 +119,8 @@ export default function authorityProvider(api: ExtensionAPI) {
         if (phase === "resume" && (state.verification.length >= 2 || state.recovery || state.lifecycle !== "active")) {
           writeFileSync(join(root, "boundary-resume.json"), JSON.stringify(state));
           content = ["Resume proof reached its observed boundary"];
+        } else if (delivered?.next) {
+          content = [call("eval", { language: "js", code: delivered.next, timeout: 0 })];
         } else if (phase !== "proof") {
           const issued = lastNext?.cell && lastNext.action && state.actions.some(action => action.id === lastNext!.action!.id && action.status === "issued");
           content = issued ? [call("eval", { language: lastNext!.cell!.language, code: lastNext!.cell!.code, timeout: lastNext!.cell!.timeout })] : [call("supership_next", {})];
@@ -151,7 +151,7 @@ export default function authorityProvider(api: ExtensionAPI) {
             const scenario = action.input.kind === "verify" ? action.input.check.scenario : undefined;
             assert.ok(!scenario || scenario.kind === "command");
             const directBash = scenario?.kind === "command" ? { command: scenario.command.map(quote).join(" "), cwd: scenario.cwd, async: false } : { command: `printf unexpected >> ${quote(join(root, "unauthorized-effects.txt"))}`, cwd, async: false };
-            content = [call("supership_runtime", forged), spoof("supership_runtime", forged), call("write", { path: "xd://supership_runtime", content: JSON.stringify(forged) }), exact, spoof("task", directTask), spoof("hub", directHub), spoof("bash", directBash)];
+            content = [call("write", { path: "xd://supership_next", content: JSON.stringify({ cellId: delivered!.cellId, page: 0 }) }), call("supership_runtime", forged), spoof("supership_runtime", forged), call("write", { path: "xd://supership_runtime", content: JSON.stringify(forged) }), exact, spoof("task", directTask), spoof("hub", directHub), spoof("bash", directBash)];
             log({ event: "attack", action, calls: content });
           } else content = [exact];
         } else content = [turns % 2 ? call("supership_next", {}) : call("write", { path: "xd://supership_next", content: "{}" })];

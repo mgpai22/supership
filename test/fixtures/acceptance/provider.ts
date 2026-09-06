@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { controlFailure, receivedControl, visibleControls, visibleNextPackets } from "../../support/control-messages.ts";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import type { Context } from "@oh-my-pi/pi-ai";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -69,11 +71,61 @@ function workerOutput(packet: Packet) {
   }
 }
 
+function deliveryResponse(context: Context, state: RunRecord | undefined): NonNullable<Parameters<typeof createMockModel>[0]>["handler"] {
+  assert.ok(state, "The native host must create the real run");
+  const results = context.messages.filter(message => message.role === "toolResult");
+  const seen = (id: string) => results.some(message => message.toolCallId === id);
+  const call = (id: string, code: string, extra: Record<string, unknown> = {}) => ({ ...toolCall("eval", { language: "js", code, timeout: 0, ...extra }), id });
+  const delivered = receivedControl(context);
+  if (!delivered) {
+    assert.ok(!seen("delivery-bootstrap"), "Native model-visible bootstrap lost its bounded cell manifest");
+    return { content: [call("delivery-bootstrap", "display(await tool.supership_next({}));")] };
+  }
+  if (delivered.next) return { content: [call(`delivery-page-${visibleControls(context).length}`, delivered.next)] };
+  const code = delivered.code!;
+  const firstPage = visibleControls(context).find(item => item.packet.kind === "cell")!.packet.next!;
+  const original = state.actions.find(action => action.programHash === hash(code));
+  assert.ok(original, "Visible pages must reconstruct the exact original issued program hash");
+  if (scenario.deliveryCancellation) {
+    if (state.lifecycle === "active") {
+      log({ event: "delivery-cancel-ready", code, action: original, state });
+      return { content: ["ACCEPTANCE_BOUNDARY original control retained for cancellation"], delayMs: 500 };
+    }
+    if (!seen("delivery-cancel-stale-page")) return { content: [call("delivery-cancel-stale-page", firstPage)] };
+    if (!seen("delivery-cancel-stale-code")) return { content: [call("delivery-cancel-stale-code", code)] };
+    log({ event: "delivery-cancel-complete", state });
+    return { content: ["ACCEPTANCE_BOUNDARY cancelled control remained stale"] };
+  }
+  const probes: Array<[string, string, Record<string, unknown>?]> = [
+    ["delivery-modified", code + "\n;"],
+    ["delivery-unrelated", "display(123);"],
+    ["delivery-timeout", code, { timeout: undefined }],
+    ["delivery-expression", firstPage + "display(123);"],
+    ["delivery-invalid-page", `display(await tool.supership_next(${JSON.stringify({ cellId: delivered.cellId, page: 0.5 })}));`],
+    ["delivery-extra-field", `display(await tool.supership_next(${JSON.stringify({ cellId: delivered.cellId, page: 0, extra: true })}));`],
+    ["delivery-unknown-id", `display(await tool.supership_next(${JSON.stringify({ cellId: "00000000-0000-4000-8000-000000000000", page: 0 })}));`],
+    ["delivery-out-of-range", `display(await tool.supership_next(${JSON.stringify({ cellId: delivered.cellId, page: delivered.pages })}));`],
+    ["delivery-forged-approval", `display(await tool.supership_next(${JSON.stringify({ cellId: delivered.cellId, page: 0, approve: true })}));`],
+  ];
+  for (const [id, expression, extra] of probes) if (!seen(id)) return { content: [call(id, expression, extra)] };
+  if (!seen("delivery-repeat-page")) return { content: [call("delivery-repeat-page", firstPage)] };
+  if (!seen("delivery-exact")) {
+    log({ event: "delivery-reconstructed", code, cellId: delivered.cellId, pages: delivered.pages, action: original, state });
+    // Both evals prepare while issued. The exact execution claims before either runs; the page must
+    // reject inside execute without clearing or pausing the other eval's prepared authority.
+    return { content: [call("delivery-pending-page", firstPage), call("delivery-exact", code)] };
+  }
+  if (!seen("delivery-duplicate")) return { content: [call("delivery-duplicate", code)] };
+  if (!seen("delivery-stale-page")) return { content: [call("delivery-stale-page", firstPage)] };
+  log({ event: "delivery-complete", state });
+  return { content: ["ACCEPTANCE_BOUNDARY control delivery proof complete"] };
+}
+
 // This fixture supplies deterministic model transport only. It never advances product state,
 // grants approvals, registers replacement workflow tools, or invokes a tool class directly.
+const seenModelResults = new Set<string>();
 export default function acceptanceProvider(api: ExtensionAPI) {
   let sessionId = "unstarted";
-  let lastNext: { cell?: { language: "js"; code: string; timeout: number }; lifecycle?: string; message?: string } | undefined;
   let parentCalls = 0;
   let snapshotRecorded = false;
   api.on("session_start", (_event, context) => {
@@ -91,11 +143,8 @@ export default function acceptanceProvider(api: ExtensionAPI) {
   api.on("tool_result", (event, ctx) => {
     log({ event: "tool-result", sessionId: ctx.sessionManager.getSessionId(), toolCallId: event.toolCallId, name: event.toolName, details: event.details, content: event.content, error: event.isError });
     if (event.toolName === "supership_next") {
-      lastNext = event.details as typeof lastNext;
       if (!snapshotRecorded && readState()?.pools.some(pool => pool.items.some(item => item.key !== undefined))) { log({ event: "native-snapshot", sessionId: ctx.sessionManager.getSessionId(), content: ctx.getAsyncJobSnapshot() }); snapshotRecorded = true; }
-      writeFileSync(join(root, "next.json"), JSON.stringify(lastNext ?? null));
     }
-    if (ctx.sessionManager.getSessionId() === readFileSync(join(root, "parent-session.txt"), "utf8") && (event.isError || event.details && typeof event.details === "object" && "isError" in event.details && event.details.isError === true)) writeFileSync(join(root, "parent-error.json"), JSON.stringify({ content: event.content, details: event.details }));
   });
   api.registerCommand("acceptance-inspect", {
     description: "Read actual command registration for the offline acceptance harness",
@@ -116,19 +165,26 @@ export default function acceptanceProvider(api: ExtensionAPI) {
       let response: NonNullable<Parameters<typeof createMockModel>[0]>["handler"];
       try {
         if (model.id === "acceptance-parent") {
-          if (++parentCalls > 400) throw new Error("Fixture exceeded 400 parent turns without terminal product progress");
-          const state = readState();
-          lastNext = existsSync(join(root, "next.json")) ? JSON.parse(readFileSync(join(root, "next.json"), "utf8")) : undefined;
-          const lastError = existsSync(join(root, "parent-error.json")) ? readFileSync(join(root, "parent-error.json"), "utf8") : undefined;
-          if (lastError) response = { content: ["ACCEPTANCE_ERROR " + lastError] };
+          if (++parentCalls > 2000) throw new Error("Fixture exceeded 2000 parent turns without terminal product progress");
+          const state = readState(), currentContext = { ...context, messages: context.messages.slice(latest + 1) };
+          const delivered = receivedControl(currentContext), latestNext = visibleNextPackets(currentContext).at(-1)?.packet;
+          for (const message of context.messages) if (message.role === "toolResult" && !seenModelResults.has(message.toolCallId)) {
+            seenModelResults.add(message.toolCallId);
+            log({ event: "model-result", toolCallId: message.toolCallId, name: message.toolName, content: message.content, error: message.isError, ...(scenario.deliveryProof || scenario.deliveryCancellation ? { state } : {}) });
+          }
+          const failure = controlFailure(currentContext, delivered);
+          if (scenario.deliveryProof || scenario.deliveryCancellation) response = deliveryResponse(context, state);
+          else if (failure?.refresh) response = { content: [toolCall("eval", { language: "js", code: "display(await tool.supership_next({}));", timeout: 0 })] };
+          else if (failure) response = { content: ["ACCEPTANCE_ERROR " + failure.error] };
           else if (scenario.dynamic && state?.phase === "build" && state.tools.filter(tool => tool.name === "acceptance_mosaic").length < proposalCount && state.work.some(work => work.id === "granted-a" && work.status === "pending") && !state.actions.some(action => ["issued", "claimed", "running", "uncertain"].includes(action.status)) && (!state.tools.length || state.tools.at(-1)?.registration === "registered")) {
             const version = state.tools.filter(tool => tool.name === "acceptance_mosaic").length + 1;
             const grants = state.work.filter(work => work.id === "granted-a" || version === 4 && work.id === "granted-b").map(work => ({ workId: work.id, workRevision: work.revision, seatId: work.seatId }));
             response = { content: [toolCall("eval", { language: "js", code: `display(await tool.supership_propose_tool(${JSON.stringify({ proposal: proposalFor(version), grants })}));` })] };
           } else if (!state) response = { content: ["ACCEPTANCE_NO_RUN"] };
-          else if (lastNext?.cell && state.actions.some(action => action.status === "issued" && action.programHash === hash(lastNext!.cell!.code))) {
-            response = { content: [toolCall("eval", { language: lastNext.cell.language, code: lastNext.cell.code, timeout: lastNext.cell.timeout })] };
-          } else if (lastNext && !lastNext.cell && (state.lifecycle !== "active" || lastNext.message?.startsWith("No eligible action.")) || (scenario.stopAfter && state.phase === scenario.stopAfter)) {
+          else if (delivered?.next) response = { content: [toolCall("eval", { language: "js", code: delivered.next, timeout: 0 })] };
+          else if (delivered?.code && state.actions.some(action => action.status === "issued" && action.programHash === hash(delivered.code!))) {
+            response = { content: [toolCall("eval", { language: "js", code: delivered.code, timeout: 0 })] };
+          } else if (latestNext && "lifecycle" in latestNext && (state.lifecycle !== "active" || latestNext.message?.startsWith("No eligible action.")) || (scenario.stopAfter && state.phase === scenario.stopAfter)) {
             response = { content: ["ACCEPTANCE_BOUNDARY " + JSON.stringify({ lifecycle: state.lifecycle, phase: state.phase, recovery: state.recovery ?? null })] };
           } else response = { content: [toolCall("eval", { language: "js", code: "display(await tool.supership_next({}));", timeout: 0 })] };
         } else if (!packet) throw new Error("Worker received no explicit assignment packet");

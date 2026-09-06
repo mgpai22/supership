@@ -16,6 +16,8 @@ export interface BuildStep {
 }
 export interface Scenario {
   id: string;
+  deliveryProof?: boolean;
+  deliveryCancellation?: boolean;
   command: Command;
   topology?: "normal" | "crossreview" | "duel" | "debate";
   builds: BuildStep[];

@@ -8,6 +8,12 @@ description: Merged Changes
 
 This page lists merged pull requests, newest first, from repository history. A pull request proposes repository changes for review.
 
+## Unreleased
+
+### Complete control-cell delivery
+
+Supership delivers large control cells, managed blocks of code, in numbered pages that fit OMP's output limit. The agent reconstructs the original cell before execution. This removes the research blockage reported in [#8](https://github.com/mgpai22/supership/issues/8), including with `--no-session`. Exact-code checks and action approval requirements remain unchanged.
+
 ## OMP 18 upgrade: offline acceptance and global installation passed
 
 The upgrade replaces the Markdown/Python driver with one TypeScript extension, a Crust CLI, and three provider-neutral personas. An extension adds behavior to OMP. A CLI is a command-line interface. A persona supplies reusable agent instructions. Provider-neutral roles do not require a specific model service.

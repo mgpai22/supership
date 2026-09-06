@@ -10,11 +10,11 @@ import { shareNativeCache } from "./support/native-cache.ts";
 
 interface Call { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> }
 interface Event {
-  event: string; id?: string; name?: string; model?: string; tools?: string[]; error?: boolean;
+  event: string; id?: string; name?: string; model?: string; tools?: string[]; error?: boolean; cellId?: string; issued?: string;
   calls?: Call[]; action?: ActionRecord; content?: Call[]; claimed?: string[]; work?: WorkRef;
   input?: Record<string, unknown>;
   results?: Array<{ id: string; name: string; error?: boolean; content: Array<{ type: string; text: string }> }>;
-  details?: { action?: ActionRecord; cells?: Array<{ status: string }>; isError?: boolean; xdev?: { tool?: string } };
+  details?: { kind?: string; cellId?: string; cells?: Array<{ status: string }>; isError?: boolean; xdev?: { tool?: string } };
 }
 
 const fixtureRoot = resolve(import.meta.dir, "fixtures", "authority");
@@ -76,9 +76,11 @@ test("native non-CodeMode authority rejects prepared-message tool IDs and serial
   assert.ok(events.filter(event => event.event === "provider").every(event => event.model === "authority-parent" || event.model === "authority-worker"), "Every real child must use only the offline transport");
 
   const concurrent = ["concurrent-next-a", "concurrent-next-b"].map(id => events.find(event => event.event === "tool-result" && event.id === id));
-  for (const result of concurrent) assert.ok(result?.details?.action, `Each concurrent request must return its actual issued action: ${root}`);
-  assert.equal(new Set(concurrent.map(event => event!.details!.action!.id)).size, 1, `Concurrent next calls issued duplicate work: ${root}`);
-  const firstAction = concurrent[0]!.details!.action!;
+  for (const result of concurrent) assert.ok(result?.details?.cellId, `Each concurrent request must return its issued manifest: ${root}`);
+  assert.equal(new Set(concurrent.map(event => event!.details!.cellId)).size, 1, `Concurrent next calls issued duplicate work: ${root}`);
+  const firstActionId = events.find(event => event.event === "decision" && event.cellId === concurrent[0]!.details!.cellId && event.issued)?.issued;
+  const firstAction = state.actions.find(action => action.id === firstActionId)!;
+  assert.ok(firstAction, "The concurrently issued manifest must reconstruct the actual first action");
   assert.equal(firstAction.input.kind, "run_finite");
   assert.equal(state.actions.filter(action => action.input.kind === "run_finite" && action.recipients.some(recipient => firstAction.recipients.some(first => first.attemptId === recipient.attemptId))).length, 1);
   for (const recipient of firstAction.recipients) assert.equal(events.filter(event => event.event === "worker-output" && event.work?.attemptId === recipient.attemptId).length, 1, "One issued logical work item must execute once");
