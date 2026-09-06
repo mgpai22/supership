@@ -1,6 +1,7 @@
+import { receivedControl } from "../../support/control-messages.ts";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { appendFileSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 const root = process.env.PRODUCT_ROOT!;
 const log = (item: unknown) => appendFileSync(join(root, "events.jsonl"), JSON.stringify(item) + "\n");
@@ -26,17 +27,18 @@ export default function fixture(api: ExtensionAPI) {
         else { const work = assignment.work; response = { content: [{ type: "toolCall", name: "yield", arguments: { data: { schemaVersion: 1, kind: "research", workId: work.id, workRevision: work.revision, attemptId: work.attemptId, answers: [], gaps: [], proposedPaths: [] } } }], delayMs: 100 }; }
       } else if (user.includes("PRODUCT_CELL\n")) {
         const after = messages.slice(messages.findLastIndex(message => message.role === "user") + 1);
-        response = after.some(message => message.role === "toolResult") ? { content: ["fixture cell complete"] } : { content: [{ type: "toolCall", name: "eval", arguments: { language: "js", code: user.slice(user.indexOf("PRODUCT_CELL\n") + "PRODUCT_CELL\n".length) } }] };
+        response = after.some(message => message.role === "toolResult") ? { content: ["fixture cell complete"] } : { content: [{ type: "toolCall", name: "eval", arguments: { language: "js", code: user.slice(user.indexOf("PRODUCT_CELL\n") + "PRODUCT_CELL\n".length), timeout: 0 } }] };
       } else if (user.includes("Supership preflight") || user.includes("Continue Supership")) {
         const after = messages.slice(messages.findLastIndex(message => message.role === "user") + 1);
-        const latest = existsSync(join(root, "next.json")) ? JSON.parse(readFileSync(join(root, "next.json"), "utf8")) : undefined;
+        const delivered = receivedControl(context);
         if (!after.some(message => message.role === "toolResult")) response = { content: [{ type: "toolCall", name: "eval", arguments: { language: "js", code: "display(await tool.supership_next({}));", timeout: 0 } }] };
-        else if (latest?.cell && after.filter(message => message.role === "toolResult").length === 1) response = { content: [{ type: "toolCall", name: "eval", arguments: { language: "js", code: latest.cell.code } }] };
+        else if (delivered?.next) response = { content: [{ type: "toolCall", name: "eval", arguments: { language: "js", code: delivered.next, timeout: 0 } }] };
+        else if (delivered?.code && !context.messages.some(message => message.role === "toolResult" && message.toolCallId === "product-issued")) response = { content: [{ type: "toolCall", id: "product-issued", name: "eval", arguments: { language: "js", code: delivered.code, timeout: 0 } }] };
         else response = { content: ["fixture stopped at the observed product boundary"] };
       } else response = { content: ["fixture ready"] };
       return createMockModel({ id: model.id, provider: model.provider, handler: response }).stream(model, context, options);
     },
   });
   api.on("tool_call", event => { log({ event: "tool_call", name: event.toolName, input: event.input }); });
-  api.on("tool_result", event => { log({ event: "tool_result", name: event.toolName, details: event.details, content: event.content, error: event.isError || !!(event.details as {isError?:boolean})?.isError }); if (event.toolName === "supership_next") writeFileSync(join(root, "next.json"), JSON.stringify(event.details)); });
+  api.on("tool_result", event => { log({ event: "tool_result", toolCallId: event.toolCallId, name: event.toolName, details: event.details, content: event.content, error: event.isError || !!(event.details as {isError?:boolean})?.isError }); });
 }

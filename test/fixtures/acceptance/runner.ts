@@ -43,6 +43,7 @@ export interface Evidence {
 export type CrashWhen = "write" | "pool" | "tool" | ((event: FixtureEvent, events: readonly FixtureEvent[], state: RunRecord | undefined) => boolean);
 export type RecoveryChoiceName = "adopt" | "retry" | "discard" | "stop" | "recreate-tool" | "reproposal" | "continue";
 export interface RunOptions {
+  persistedSession?: boolean;
   tui?: boolean; timeout?: number; nonGit?: boolean; nativePlanMode?: boolean; extraArgs?: string[];
   resume?: Evidence;
   whileRunning?: (evidence: Evidence) => Promise<void>;
@@ -175,8 +176,8 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
   assert.ok(installed, "Installed OMP is required for acceptance");
   const version = run([launcher, installed, "--version"]).trim();
   // Record the executing patch version; product preflight enforces the supported range.
-  const command = options.resume ? `/${scenario.command} --resume ${slug}` : `/${scenario.command} --slug ${slug}${scenario.topology ? ` --topology ${scenario.topology}` : ""}${scenario.reviewRounds ? ` --review-rounds ${scenario.reviewRounds}` : ""}${scenario.concurrency ? ` --concurrency ${scenario.concurrency}` : ""}${scenario.push ? " --push" : ""} Execute offline acceptance ${scenario.id}`;
-  const args = [launcher, installed, "--config", config, "--no-title", "--no-session", "--no-lsp", "--no-skills", "--no-rules", "--model", "openai-codex/acceptance-parent", ...options.extraArgs ?? []];
+  const command = options.resume ? `/${scenario.command} --resume ${slug}` : `/${scenario.command} --slug ${slug}${scenario.topology ? ` --topology ${scenario.topology}` : ""}${scenario.reviewRounds ? ` --review-rounds ${scenario.reviewRounds}` : ""}${scenario.concurrency ? ` --concurrency ${scenario.concurrency}` : ""}${scenario.push ? " --push" : ""} Execute offline acceptance ${scenario.id}${scenario.deliveryProof ? " " + 'quote" slash\\ newline\n tab\t 雪🙂\u0001'.repeat(80) : ""}`;
+  const args = [launcher, installed, "--config", config, "--no-title", ...options.persistedSession ? [] : ["--no-session"], "--no-lsp", "--no-skills", "--no-rules", "--model", "openai-codex/acceptance-parent", ...options.extraArgs ?? []];
   let terminal: string, exitCode: number | null = 0;
   let timedOut = false, observationError: unknown;
   if (!tui) terminal = run([...args, "-p", "/acceptance-inspect", command]);

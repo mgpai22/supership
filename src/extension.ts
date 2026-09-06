@@ -22,6 +22,7 @@ import { observeChildUsage, prepareUsageMeter, readUsageObservations, releaseUsa
 import { renderDashboard } from "./dashboard.ts";
 import { captureWorkerOutput, nativeName, normalizeNativeResult, probeCapabilities, readRuntimeSnapshot, receiptBase, reconcileRuntime, releaseSeatBindings, removeExtensionRoots, renderControlCell, resolveSeats, runtimeToolName, taskParameters, validateControlCall, type ControlCell, type SeatResolution } from "./omp.ts";
 import { captureProposal, inspectProposal, readCapturedSource, validateGrant, PARENT_ACCESS, TOOL_POLICY_LIMIT } from "./tools.ts";
+import { NextRequestSchema, nextExpression, issueControl, controlManifest, controlPage, controlResult, type IssuedControl } from "./control-delivery.ts";
 
 export const COMMANDS = ["supership", "shipit", "ultraship", "ultrashipit", "superreview"] as const;
 export interface Invocation { invocation: InvocationRecord; slug: string; resume: boolean; limits: Limits; seats: Record<string, string> }
@@ -106,7 +107,7 @@ export function requestedSeats(invocation: Invocation, policy: PolicyOverlay): S
   return names.map(seatId => { const request = policy.seats.find(seat => seat.seatId === seatId) ?? { seatId, agentName: baseAgents[seatId] ?? seatId }; return { ...request, ...(invocation.seats[seatId] ? { model: invocation.seats[seatId] } : {}) }; });
 }
 
-interface ActiveRun { state: RunRecord; writer: RunWriter; settings: Settings; seats: SeatResolution; ownership: OwnershipRecord; cells: Map<string, ControlCell>; native: Map<string, unknown>; workspaces: Map<string,WorkspaceBinding>; capturedWorkspaces:Set<string>; scopeRevision:number; childRoots: string[]; restoreSettings: () => void; kernelToken: string; evalAction?: string; evalCallId?: string; evalExecuting?: string; allowedTurn: boolean }
+interface ActiveRun { state: RunRecord; writer: RunWriter; settings: Settings; seats: SeatResolution; ownership: OwnershipRecord; cells: Map<string, IssuedControl>; native: Map<string, unknown>; workspaces: Map<string,WorkspaceBinding>; capturedWorkspaces:Set<string>; scopeRevision:number; childRoots: string[]; restoreSettings: () => void; kernelToken: string; evalAction?: string; evalCallId?: string; evalExecuting?: string; allowedTurn: boolean }
 interface PendingStart { invocation: Invocation; settings: Settings; nonce: string }
 // Session-local runtime overrides for one run: verification commands must settle in the cell, native isolation must exist for
 // worktree assignments, and native scratch must never auto-apply into the parent checkout. Restored exactly when the run releases.
@@ -378,7 +379,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     }
     if(["status","continue","cancel"].includes(raw.trim())) {ctx.ui.notify(lastRun?lastRun.slug+": "+lastRun.lifecycle+". "+lastRun.path+"/plan.html. No run restarts; use an explicit start or resume command.":"No active Supership run. Start or resume explicitly.","info");return;}
     if (pending) throw new Error("A Supership startup preflight is already pending.");
-    const invocation = parseInvocation(command, raw), nonce = `Supership preflight ${randomUUID()}. After the extension validates startup, call supership_next (through eval only as display(await tool.supership_next({})); with timeout:0); execute only its exact native control cell, then call supership_next again. Never approve through tools or HTML.`;
+    const invocation = parseInvocation(command, raw), nonce = `Supership preflight ${randomUUID()}. After the extension validates startup, call supership_next (through eval only as display(await tool.supership_next({})); with timeout:0). Follow each exact next expression in a separate eval/display until next is null. Concatenate the ordered page code strings without separators, then execute that original JavaScript with timeout:0. Never edit the code or approve through tools or HTML.`;
     pending = { invocation, settings: await SettingsManager.create(ctx.cwd), nonce };
     try { await sendControl(nonce); } catch (error) { pending = undefined; throw error; }
   } });
@@ -566,9 +567,22 @@ export default function registerSupership(api: ExtensionAPI): void {
     }
     throw new Error(`Action ${input.kind} is a parent native control cell.`);
   }
+  function currentControl(cellId: string): IssuedControl {
+    const run = requireRun(), issued = [...run.cells.values()].find(issued => issued.cellId === cellId);
+    const cell = issued?.cell, action = cell && run.state.actions.find(action => action.id === cell.actionId);
+    if (!run.allowedTurn || !issued || !cell || !action || action.status !== "issued" ||
+      action.runId !== run.state.runId || cell.runId !== action.runId ||
+      run.state.owner.sessionId !== run.writer.request.sessionId || run.state.owner.leaseId !== run.writer.leaseId ||
+      action.ownerEpoch !== run.state.owner.epoch || cell.ownerEpoch !== action.ownerEpoch ||
+      action.expectedStateRevision !== run.state.eventSequence || cell.expectedStateRevision !== action.expectedStateRevision ||
+      action.planRevision !== run.state.planRevision || cell.inputHash !== action.inputHash || cell.programHash !== action.programHash) {
+      throw new Error("Supership control cell is unknown, stale, claimed, or no longer authorized.");
+    }
+    return issued;
+  }
   async function next(ctx:ExtensionContext) {
     const run = requireRun(); if (!run.allowedTurn) throw new Error("Current native Plan Mode preflight has not passed.");
-    if (["completed", "cancelled"].includes(run.state.lifecycle)) { const completed = { lifecycle: run.state.lifecycle, conclusion: run.state.conclusion ?? null, dashboard: join(run.writer.runPath, "plan.html") }; await release(); return result(completed); }
+    if (["completed", "cancelled"].includes(run.state.lifecycle)) { const completed = { lifecycle: run.state.lifecycle, message: "Run finished. Inspect the retained dashboard for its conclusion." }; await release(); return controlResult(completed); }
     // Snapshot, advance, draft and issue must commit against one state revision: a parent callback return or a user
     // instruction landing in between re-selects a different action and the stale draft is rightly rejected. The lock
     // covers the whole window and noninteractive trusted effects through settlement, so a Git mutation cannot
@@ -579,7 +593,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     await captureFinishedWork();
     if(run.scopeRevision!==run.state.planRevision){await persist({kind:"record-git-observation",observation:await observedCode()});run.scopeRevision=run.state.planRevision;}
     const existing = run.state.actions.find(action => action.status === "issued" && action.expectedStateRevision === run.state.eventSequence);
-    if (existing) return result({ action: existing, cell: run.cells.get(existing.id) ?? null });
+    if (existing) { const issued = run.cells.get(existing.id); if (!issued) throw new Error("Issued control code is unavailable; resume through the OMP TUI."); return controlResult(controlManifest(currentControl(issued.cellId))); }
     const snapshot = readRuntimeSnapshot(ctx, run.state, syncConcurrencyCap(run.settings, run.state.limits.concurrency));
     await persist({ kind: "record-runtime-snapshot", snapshot });
     await recordUsage(ctx);
@@ -590,7 +604,7 @@ export default function registerSupership(api: ExtensionAPI): void {
       draft = selectNextAction(run.state, snapshot);
       if (draft || run.state.eventSequence === sequence) break;
     }
-    if (!draft) return result({ lifecycle: run.state.lifecycle, phase: run.state.phase, recovery: run.state.recovery ?? null, message: "No eligible action. Retained owners and required decisions are authoritative; do not invent work or repeat an action." });
+    if (!draft) return controlResult({ lifecycle: run.state.lifecycle, phase: run.state.phase, message: "No eligible action. Inspect retained owners and required decisions through the OMP TUI. Do not repeat an action." });
     const prospective: ActionRecord = { schemaVersion: 1, id: `a-${run.state.eventSequence + 1}`, runId: run.state.runId, ownerEpoch: run.state.owner.epoch, expectedStateRevision: run.state.eventSequence + 1, ...draft, inputHash: digestJson(draft.input), status: "issued", issuedAt: Date.now(), receiptIds: [] };
     const native = ["run_finite", "wait", "cancel_runtime", "pool_create", "pool_push", "pool_close", "register_tool", "retire_tool", "verify"].includes(draft.input.kind);
     if(draft.input.kind==="run_finite") for(const [index,assignment] of draft.input.assignments.entries()) {
@@ -615,12 +629,20 @@ export default function registerSupership(api: ExtensionAPI): void {
     } finally { releaseIssue(); }
 
     if(run.workspaces.size) await writeFile(join(run.writer.runPath,"workspace-bindings.json"),canonicalJson([...run.workspaces.values()]),{mode:0o600});
-    if (cell) { run.cells.set(action.id, cell); return result({ action, cell }); }
+    if (cell) { const issued = issueControl(cell); run.cells.set(action.id, issued); return controlResult(controlManifest(currentControl(issued.cellId))); }
     if (action.input.kind === "collect_input" || action.input.kind === "prepare_push") await trustedAction(action, ctx);
-    return result({completedAction:action.id,lifecycle:run.state.lifecycle,...(run.state.recovery?{message:run.state.recovery.primaryReason+". Resume through the OMP TUI for the required decision.",recovery:run.state.recovery}:{}),next:run.state.recovery?"Do not repeat this action without its required decision.":"Call supership_next."});
+    return controlResult({completedAction:action.id,lifecycle:run.state.lifecycle,...(run.state.recovery?{message:"A recovery decision is required. Resume through the OMP TUI."}:{}),next:run.state.recovery?"Do not repeat this action without its required decision.":"Call supership_next."});
   }
   let nextInFlight:ReturnType<typeof next>|undefined;
-  api.registerTool({name:"supership_next",label:"Supership next action",description:"Read the extension-owned next action; trusted decisions may run inside this call, so an eval-bridged read needs timeout:0. Execute only its exact JavaScript control cell with timeout:0. Cannot approve decisions.",parameters:Type.Object({},{additionalProperties:false}),async execute(_id,_args,_signal,_update,ctx){if(nextInFlight)return nextInFlight;const request=next(ctx);nextInFlight=request;try{return await request;}finally{if(nextInFlight===request)nextInFlight=undefined;}}});
+  api.registerTool({name:"supership_next",label:"Supership next action",description:"Issue a bounded control manifest, or read one ordered page of its original code. Follow each exact next expression in a separate eval/display. At next:null, concatenate page code without separators and execute the original JavaScript with timeout:0. Bootstrap may ask trusted TUI decisions and also needs timeout:0. Pages are read-only and cannot approve or execute anything.",parameters:NextRequestSchema,async execute(_id,args,_signal,_update,ctx){
+    const { i: _intent, ...parameters } = args as Record<string, unknown>;
+    const requestArgs: unknown = parameters;
+    assertSchema(NextRequestSchema,requestArgs);
+    // Device dispatch bypasses inner tool_call hooks; authorization must hold here too.
+    if (!requireRun().allowedTurn) throw new Error("Current native Plan Mode preflight has not passed.");
+    if ("cellId" in requestArgs) return controlResult(controlPage(currentControl(requestArgs.cellId),requestArgs.page));
+    if(nextInFlight)return nextInFlight;const request=next(ctx);nextInFlight=request;try{return await request;}finally{if(nextInFlight===request)nextInFlight=undefined;}
+  }});
   api.registerTool({ name: "supership_propose_tool", label: "Supership tool proposal", description: "Capture JavaScript source, schema, effects and requested grants for approval. This does not register or execute source.", parameters: Type.Object({ proposal: ToolProposalSchema, grants: Type.Array(ToolGrantSchema) }, { additionalProperties: false }), async execute(_id, args) {
     const run = requireRun();
     const captured = await captureProposal(args.proposal, { runPath: run.writer.runPath, existingNames: api.getAllTools().map(tool => tool.name) });
@@ -843,12 +865,23 @@ export default function registerSupership(api: ExtensionAPI): void {
     if(event.toolName==="read" && typeof event.input.path==="string") readInputs.set(event.toolCallId,event.input.path);
     if (event.toolName === "eval") {
       // Trusted TUI decisions (recovery, approvals, clarification) run inside this call; the native default deadline would kill the kernel mid-dialog.
-      if (event.input.language === "js" && event.input.reset !== true && event.input.code === "display(await tool.supership_next({}));") return event.input.timeout === 0 ? undefined : { block: true, reason: "Call supership_next through eval with timeout:0; trusted decisions may outlast the default deadline." };
+      if (event.input.language === "js" && event.input.reset !== true && typeof event.input.code === "string") {
+        const fetch = /^display\(await tool\.supership_next\(([^]*)\)\);$/.exec(event.input.code);
+        if (fetch) {
+          try {
+            const args: unknown = JSON.parse(fetch[1]!); assertSchema(NextRequestSchema,args);
+            if (event.input.code !== nextExpression(args)) throw new Error("Use the exact control fetch expression.");
+            if (event.input.timeout !== 0) throw new Error("Call supership_next through eval with timeout:0; trusted decisions may outlast the default deadline.");
+            if ("cellId" in args) controlPage(currentControl(args.cellId),args.page);
+            return;
+          } catch (error) { return { block: true, reason: error instanceof Error ? error.message : "Invalid Supership control fetch." }; }
+        }
+      }
       if (event.input.language === "js" && event.input.reset !== true && typeof event.input.code === "string") {
         const proposal = /^display\(await tool\.supership_propose_tool\(([^]*)\)\);$/.exec(event.input.code);
         if (proposal) { try { const args = JSON.parse(proposal[1]!); assertSchema(ToolProposalSchema, args.proposal); if (Array.isArray(args.grants)) return; } catch { /* Invalid literal proposals cannot bypass the control gate. */ } }
       }
-      const cell = [...run.cells.values()].find(cell => typeof event.input.code === "string" && cell.programHash === sha256Utf8(event.input.code));
+      const cell = [...run.cells.values()].map(issued => issued.cell).find(cell => typeof event.input.code === "string" && cell.programHash === sha256Utf8(event.input.code));
       const action = cell && run.state.actions.find(action => action.id === cell.actionId);
       if (!cell || !action || !validateControlCall(event.input, action, cell).valid) return { block: true, reason: "Use only the exact issued Supership control cell. Unknown, stale, changed, and duplicate cells are refused." };
       await claim(action, event.toolCallId); run.evalAction = action.id; run.evalCallId = event.toolCallId; return;
@@ -885,7 +918,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     const run = active;
     if(event.toolName==="read" && readInputs.has(event.toolCallId)) { run.native.set("read:"+readInputs.get(event.toolCallId),JSON.parse(JSON.stringify({content:event.content,details:event.details,isError:event.isError}))); readInputs.delete(event.toolCallId); }
     if (["task", "hub", "bash"].includes(event.toolName) && run.evalAction) { const observed = JSON.parse(JSON.stringify({ content: event.content, details: event.details, isError: event.isError })); run.native.set(run.evalAction, observed); run.native.set(event.toolCallId, observed); }
-    if (event.toolName === "eval") {
+    if (event.toolName === "eval" && event.toolCallId === run.evalCallId) {
       const action = run.state.actions.find(action => action.id === run.evalAction); run.evalAction = undefined; run.evalCallId = undefined; run.evalExecuting = undefined;
       const details = event.details as {isError?:boolean;cells?:Array<{status?:string}>} | undefined;
       if ((event.isError || details?.isError || details?.cells?.some(cell=>cell.status==="error")) && action) { const ref = await evidence("control-error", { actionId: action.id, content: event.content }, "Control cell failed; execution effects may exist."); await persist({ kind: "record-runtime-snapshot", snapshot: readRuntimeSnapshot(ctx, run.state, syncConcurrencyCap(run.settings, run.state.limits.concurrency)) }); await pause(`Control action ${action.id} failed. Inspect ${ref.uri} and live owners before retry.`, ctx); }

@@ -60,6 +60,9 @@ test("real product extension gates startup and native eval through isolated offl
   const events=readFileSync(join(root,"events.jsonl"),"utf8").trim().split("\n").map(line=>JSON.parse(line));
   assert.ok(events.some(event=>event.event==="tool_call" && event.name==="supership_next"));
   assert.ok(events.some(event=>event.event==="provider" && event.user.includes("PRODUCT_CELL") && typeof event.lastToolResult==="string"), root);
+  const issued = events.find(event => event.event === "tool_result" && event.toolCallId === "product-issued");
+  assert.ok(issued && !issued.error && !issued.details?.cells?.some((cell: {status: string}) => cell.status === "error"), "The retrieved original control must execute successfully");
+  assert.ok(state.actions.some((action: {claimToolCallId?: string; receiptIds: string[]}) => action.claimToolCallId === "product-issued" && action.receiptIds.length), "The actual runtime must record the issued control receipts");
   assert.equal(existsSync(join(root,"unauthorized.txt")),false,"Rejected raw eval must not execute its filesystem effect.");
   assert.ok(events.every(event=>event.event!=="provider" || event.model.startsWith("product-")));
   const report={product:"passed",proof:["public initialized print host","durable startup","one active run","run-local alias models","native Code Mode bridge","unknown eval rejected"],root};
