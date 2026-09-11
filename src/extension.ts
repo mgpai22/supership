@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext, Settings 
 // Public compatibility facade, resolved by OMP's file-loaded extension loader in the active session.
 // The declaration in omp-compat.d.ts describes this host-provided public facade.
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { Type } from "@sinclair/typebox/type";
+import { CloneType, Type } from "@sinclair/typebox/type";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, open, readdir, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve, sep } from "node:path";
@@ -634,7 +634,8 @@ export default function registerSupership(api: ExtensionAPI): void {
     return controlResult({completedAction:action.id,lifecycle:run.state.lifecycle,...(run.state.recovery?{message:"A recovery decision is required. Resume through the OMP TUI."}:{}),next:run.state.recovery?"Do not repeat this action without its required decision.":"Call supership_next."});
   }
   let nextInFlight:ReturnType<typeof next>|undefined;
-  api.registerTool({name:"supership_next",label:"Supership next action",description:"Issue a bounded control manifest, or read one ordered page of its original code. Follow each exact next expression in a separate eval/display. At next:null, concatenate page code without separators and execute the original JavaScript with timeout:0. Bootstrap may ask trusted TUI decisions and also needs timeout:0. Pages are read-only and cannot approve or execute anything.",parameters:NextRequestSchema,async execute(_id,args,_signal,_update,ctx){
+  // OMP rewrites registered schemas for model transport; keep internal validation schemas unchanged.
+  api.registerTool({name:"supership_next",label:"Supership next action",description:"Issue a bounded control manifest, or read one ordered page of its original code. Follow each exact next expression in a separate eval/display. At next:null, concatenate page code without separators and execute the original JavaScript with timeout:0. Bootstrap may ask trusted TUI decisions and also needs timeout:0. Pages are read-only and cannot approve or execute anything.",parameters:CloneType(NextRequestSchema),async execute(_id,args,_signal,_update,ctx){
     const { i: _intent, ...parameters } = args as Record<string, unknown>;
     const requestArgs: unknown = parameters;
     assertSchema(NextRequestSchema,requestArgs);
@@ -643,14 +644,14 @@ export default function registerSupership(api: ExtensionAPI): void {
     if ("cellId" in requestArgs) return controlResult(controlPage(currentControl(requestArgs.cellId),requestArgs.page));
     if(nextInFlight)return nextInFlight;const request=next(ctx);nextInFlight=request;try{return await request;}finally{if(nextInFlight===request)nextInFlight=undefined;}
   }});
-  api.registerTool({ name: "supership_propose_tool", label: "Supership tool proposal", description: "Capture JavaScript source, schema, effects and requested grants for approval. This does not register or execute source.", parameters: Type.Object({ proposal: ToolProposalSchema, grants: Type.Array(ToolGrantSchema) }, { additionalProperties: false }), async execute(_id, args) {
+  api.registerTool({ name: "supership_propose_tool", label: "Supership tool proposal", description: "Capture JavaScript source, schema, effects and requested grants for approval. This does not register or execute source.", parameters: CloneType(Type.Object({ proposal: ToolProposalSchema, grants: Type.Array(ToolGrantSchema) }, { additionalProperties: false })), async execute(_id, args) {
     const run = requireRun();
     const captured = await captureProposal(args.proposal, { runPath: run.writer.runPath, existingNames: api.getAllTools().map(tool => tool.name) });
     for (const grant of args.grants) if (!run.state.work.some(work => work.id === grant.workId && work.revision === grant.workRevision && work.seatId === grant.seatId) || !args.proposal.intendedUsers.includes(grant.seatId)) throw new Error("Proposal grant is not an intended current work recipient.");
     const definition: ToolDefinitionRecord = { ...captured, version: Math.max(0, ...run.state.tools.filter(tool => tool.name === captured.name).map(tool => tool.version)) + 1, grants: args.grants, approvalScopeHash: toolApprovalScope(captured, args.grants), parent: { cwd: run.state.repository.root, sessionId: run.state.owner.sessionId, ownerEpoch: run.state.owner.epoch }, kernelGeneration: run.state.kernelGeneration, registration: "proposed", evidence: [] };
     await persist({ kind: "record-tool", definition }); return result({ name: definition.name, version: definition.version, approvalScopeHash: definition.approvalScopeHash, registered: false, policy: inspectProposal(args.proposal) });
   } });
-  api.registerTool({ name: "supership_runtime", label: "Supership runtime receipt", description: "Internal typed control-cell lifecycle adapter. Never call outside the issued cell.", parameters: Type.Object({ actionId: Type.String(), operation: Type.String(), data: Type.Unknown() }, { additionalProperties: false }), async execute(id, args, _signal, _update, ctx) {
+  api.registerTool({ name: "supership_runtime", label: "Supership runtime receipt", description: "Internal typed control-cell lifecycle adapter. Never call outside the issued cell.", parameters: CloneType(Type.Object({ actionId: Type.String(), operation: Type.String(), data: Type.Unknown() }, { additionalProperties: false })), async execute(id, args, _signal, _update, ctx) {
     const run = requireRun(), action = run.state.actions.find(action => action.id === args.actionId);
     if (!action || run.evalAction !== action.id || !["claimed", "running"].includes(action.status)) throw new Error("Runtime report has no active verified action.");
     const observation: ReceiptObservation = { kind: "runtime-confirmed", toolCallId: id, verifiedProgramHash: action.programHash, evidence: [] };
@@ -781,7 +782,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     }
     throw new Error(`Runtime operation ${args.operation} has no matching action normalization.`);
   } });
-  api.registerTool({name:"supership_workspace",label:"Supership retained workspace",description:"Internal exact grant callback for retained builder I/O.",parameters:Type.Object({actionId:Type.String(),work:WorkRefSchema,manifestDigest:Type.String(),token:Type.String(),stage:Type.Union([Type.Literal("begin"),Type.Literal("end")]),operation:Type.Optional(Type.Union([Type.Literal("read"),Type.Literal("write"),Type.Literal("edit"),Type.Literal("bash")])),input:Type.Optional(Type.Record(Type.String(),Type.Unknown())),invocationId:Type.Optional(Type.String()),outcome:Type.Optional(Type.String())},{additionalProperties:false}),async execute(id,args,_signal,_update,ctx) {
+  api.registerTool({name:"supership_workspace",label:"Supership retained workspace",description:"Internal exact grant callback for retained builder I/O.",parameters:CloneType(Type.Object({actionId:Type.String(),work:WorkRefSchema,manifestDigest:Type.String(),token:Type.String(),stage:Type.Union([Type.Literal("begin"),Type.Literal("end")]),operation:Type.Optional(Type.Union([Type.Literal("read"),Type.Literal("write"),Type.Literal("edit"),Type.Literal("bash")])),input:Type.Optional(Type.Record(Type.String(),Type.Unknown())),invocationId:Type.Optional(Type.String()),outcome:Type.Optional(Type.String())},{additionalProperties:false})),async execute(id,args,_signal,_update,ctx) {
     const run=requireRun(),binding=run.workspaces.get(args.work.attemptId);
     if(!binding || binding.actionId!==args.actionId || binding.manifestDigest!==args.manifestDigest || digestJson(binding.work)!==digestJson(args.work)) throw new Error("Workspace callback does not match its immutable work grant.");
     if(args.stage==="begin") {
@@ -817,7 +818,7 @@ export default function registerSupership(api: ExtensionAPI): void {
       return result({recorded:true});
     } finally {workspaceCalls.delete(args.invocationId!);call.release();}
   }});
-  api.registerTool({ name: "supership_callback", label: "Supership parent callback", description: "Record a grant-bound parent callback and its separately attributed Git effects.", parameters: Type.Object({ actionId: Type.String(), name: Type.String(), version: Type.Integer(), grant: ToolGrantSchema, token: Type.String(), stage: Type.Union([Type.Literal("begin"), Type.Literal("end")]), data: Type.Record(Type.String(), Type.Unknown()) }, { additionalProperties: false }), async execute(id, args, _signal, _update, ctx) {
+  api.registerTool({ name: "supership_callback", label: "Supership parent callback", description: "Record a grant-bound parent callback and its separately attributed Git effects.", parameters: CloneType(Type.Object({ actionId: Type.String(), name: Type.String(), version: Type.Integer(), grant: ToolGrantSchema, token: Type.String(), stage: Type.Union([Type.Literal("begin"), Type.Literal("end")]), data: Type.Record(Type.String(), Type.Unknown()) }, { additionalProperties: false })), async execute(id, args, _signal, _update, ctx) {
     const run=requireRun(),prior=args.stage==="end"?callbacks.get(String(args.data.invocationId)):undefined;
     const definition=prior?.definition??run.state.tools.find(tool=>tool.name===args.name&&tool.version===args.version);
     const work=run.state.work.find(work=>work.id===args.grant.workId&&work.revision===args.grant.workRevision);

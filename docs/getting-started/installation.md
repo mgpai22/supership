@@ -10,7 +10,7 @@ The upgrade targets Linux, Git, Bun `>=1.3.14`, and OMP `>=18.1.10 <18.2.0`.
 
 At startup, Supership makes sure that OMP provides the required version and features. It also resolves seats, the assignments of agents and models. Supership refuses OMP Plan Mode and supports Code Mode.
 
-The complete offline suite and typecheck passed with compiled OMP 18.1.11 and SDK 18.1.10 fixtures. Typecheck detects incompatible code types. SDK means software development kit. Fixtures supply controlled test inputs.
+Offline verification passed with compiled and official npm OMP 18.1.17. See [Architecture](/docs/reference/architecture#verification-limits) for evidence and limits.
 
 These commands describe the managed CLI, a command-line interface. They do not establish that an installation uses the new package.
 

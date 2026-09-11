@@ -10,7 +10,7 @@ Supership adds a guided coding process to Oh My Pi (OMP).
 
 The extension stores workflow state, the recorded progress and decisions. The main OMP agent does task and JavaScript eval actions in its session. Eval means code evaluation within a persistent session.
 
-The complete offline suite and typecheck passed with compiled OMP 18.1.11 and SDK 18.1.10 fixtures. A typecheck detects incompatible code types. SDK means software development kit. Fixtures provide controlled test inputs.
+Offline verification passed with compiled and official npm OMP 18.1.17. See [Architecture](/docs/reference/architecture#verification-limits) for evidence and limits.
 
 Offline scripts do not establish the quality of real-model judgments.
 

@@ -16,7 +16,7 @@ The target is Linux, Git, and OMP `>=18.1.10 <18.2.0`. Supership makes sure that
 
 Native test homes share only their extracted binary cache, stored executable files for reuse. Configuration, providers, sessions, and evidence remain isolated. A provider supplies model responses. Evidence directories remain local after a run.
 
-For compiled-host verification, put the intended OMP directory first on PATH. Set `SUPERSHIP_ACCEPTANCE_OMP` to its absolute path. Operate `bun test ./test` directly.
+For host verification, put the directory of the intended OMP executable first on PATH. Set `SUPERSHIP_ACCEPTANCE_OMP` to that executable's absolute path. Operate `bun test ./test` directly.
 
 `bun run test` prepends local package executables and can select the SDK CLI instead. SDK means software development kit.
 
@@ -95,6 +95,10 @@ These source findings establish loading conventions. They do not prove that actu
 
 Supership uses scripted providers to make sure that requirements pass through real OMP sessions, tasks, eval, hooks, and native yield. The test harness isolates `HOME/config/auth`, disables ambient model features, and blocks external network access. No fictional mock/offline CLI flag substitutes for this boundary.
 
-These scripts provide evidence for the software behavior that they exercise. They do not prove model judgment quality. The complete offline suite and typecheck passed with compiled OMP 18.1.11 and the pinned SDK 18.1.10 fixtures.
+The complete offline suite and typecheck passed locally with compiled OMP 18.1.17, Bun 1.3.14, and pinned SDK 18.1.10 fixtures.
+
+On a separate machine, the complete offline suite passed with official npm OMP 18.1.17 and Bun 1.4.2: 183 passed, zero failed, exit code zero. Its actual npm executable directory came first on PATH. The isolated HOME also exposed that executable through its local bin directory because the SDK test constructs PATH from HOME. Matching version strings alone do not establish equivalent package behavior.
+
+These scripts prove only the software behavior they exercise, not model judgment quality. A live smoke check received real-provider responses but paused during research on token and cost caps before the requested change. The parent agent needed retries to reproduce the exact paged control code. This check does not prove a completed live workflow or live dynamic-tool recovery.
 
 This evidence does not cover every patch in the supported range. 
