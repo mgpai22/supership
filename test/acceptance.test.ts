@@ -165,7 +165,11 @@ for (const scenario of [mixedScenario, { ...mixedScenario, id: "mixed-omp-ceilin
   assert.ok(snapshots.some(fact => fact.snapshot.activeOwners.some(owner => owner.kind !== "pool")));
   for (const fact of snapshots) assert.equal(fact.snapshot.ompCeiling, scenario.ompConcurrency === 0 ? null : scenario.ompConcurrency);
   assert.equal(state.limits.concurrency, scenario.concurrency);
-  for (const fact of snapshots) assert.ok(fact.snapshot.activeOwners.filter(owner => owner.kind !== "pool").length <= Math.min(scenario.concurrency ?? 3, scenario.ompConcurrency || 3));
+  for (const fact of snapshots) {
+    const active = fact.snapshot.activeOwners.filter(owner => owner.kind !== "pool").length;
+    if (scenario.concurrency !== undefined) assert.ok(active <= scenario.concurrency);
+    if (scenario.ompConcurrency) assert.ok(active <= scenario.ompConcurrency);
+  }
   assert.equal(state.reviewRounds.length, 2);
   assert.ok(state.pools.some(pool => pool.items.length >= 2), "One product lens/round pool must process repeated independent items");
   for (const pool of state.pools) {

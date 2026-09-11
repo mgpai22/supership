@@ -10,6 +10,12 @@ This page lists merged pull requests, newest first, from repository history. A p
 
 ## Unreleased
 
+### Dynamic tools on OMP 18.1.17
+
+Supership uses `CloneType` at all five `api.registerTool` sites so OMP wire conversion cannot change its internal TypeBox validation schemas. Offline tests cover dynamic tool proposals, callback recovery, and tool recreation after kernel loss. Approval and grant checks remain unchanged.
+
+The unlimited-concurrency acceptance assertion now enforces only explicit finite Supership and native OMP limits. It no longer assumes a default ceiling of three.
+
 ### Complete control-cell delivery
 
 Supership delivers large control cells, managed blocks of code, in numbered pages that fit OMP's output limit. The agent reconstructs the original cell before execution. This removes the research blockage reported in [#8](https://github.com/mgpai22/supership/issues/8), including with `--no-session`. Exact-code checks and action approval requirements remain unchanged.
