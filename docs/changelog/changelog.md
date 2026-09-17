@@ -10,6 +10,10 @@ This page lists merged pull requests, newest first, from repository history. A p
 
 ## Unreleased
 
+### OMP 18.2.3 fixtures
+
+Supership pins SDK 18.2.3 fixtures within the accepted `>=18.1.10 <18.3.0` range. OMP 18.2.3 resolves config-backed headers asynchronously and changes revived-subagent extension handling; Supership uses neither removed API, and the offline suite re-proves sessions, tasks, eval, and native yield on both hosts. Approval, grant, and exact-code checks remain unchanged.
+
 ### OMP 18.2 support
 
 Supership accepts OMP `>=18.1.10 <18.3.0` with SDK 18.2.2 fixtures. Fixtures supply controlled test inputs. OMP 18.2 converts tool schemas from a clone, so the `CloneType` workaround now guards 18.1 hosts only. Tests no longer assume same-message tool calls run in order, and native isolation cleanup is asserted after session release, matching the 18.2 kept-alive lifecycle. Approval, grant, and exact-code checks remain unchanged.
