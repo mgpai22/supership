@@ -10,6 +10,22 @@ This page lists merged pull requests, newest first, from repository history. A p
 
 ## Unreleased
 
+### Torn result reads wait instead of failing
+
+When a wait round reads a child result that is still streaming, the replay reports not-ready and the wait repeats instead of failing the action into recovery. Only identical unreadable bytes past three rounds prove malformation. Completed results keep their existing validation and correction policy.
+
+### Control pages split on safe boundaries
+
+Control pages now break after punctuation or whitespace, never inside an identifier, escape sequence, or surrogate pair. Dense spans without safe units keep escape units whole. Reassembly stays byte-exact concatenation.
+
+### Missing planning ignore names its fix
+
+Run creation in a repository that does not ignore `.planning/` now reports `planning-not-ignored` and tells the user to add the ignore entry, instead of a bare git exit code. The ignore requirement itself is unchanged: run state must never be committed.
+
+### Unreadable agent files no longer veto startup
+
+Seat resolution skips agent files it cannot parse instead of aborting startup with a bare parser error. Only a seat that needs the broken file fails, and its error names the file and reason. This matches OMP discovery, which also skips invalid agent definitions.
+
 ### OMP 18.2.3 fixtures
 
 Supership pins SDK 18.2.3 fixtures within the accepted `>=18.1.10 <18.3.0` range. OMP 18.2.3 resolves config-backed headers asynchronously and changes revived-subagent extension handling; Supership uses neither removed API, and the offline suite re-proves sessions, tasks, eval, and native yield on both hosts. Approval, grant, and exact-code checks remain unchanged.

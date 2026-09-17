@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Type, type Static } from "@sinclair/typebox/type";
@@ -53,29 +53,39 @@ async function parseSource(path: string, kind: AgentSource["kind"]): Promise<Age
   const content = await readFile(path, "utf8");
   const match = /^---\r?\n([^]*?)\r?\n---(?:\r?\n|$)([^]*)$/.exec(content);
   if (!match) throw new Error(`Agent ${path} has no YAML frontmatter.`);
-  const metadata = Bun.YAML.parse(match[1]!) as Record<string, unknown>;
+  let metadata: Record<string, unknown>;
+  try { metadata = Bun.YAML.parse(match[1]!) as Record<string, unknown>; }
+  catch (error) { throw new Error(`Agent ${path} has invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`); }
   if (!metadata || typeof metadata.name !== "string" || typeof metadata.description !== "string") throw new Error(`Agent ${path} needs name and description.`);
   return { path, kind, body: match[2]!, metadata, content };
 }
-async function directoryAgents(path: string, kind: AgentSource["kind"]): Promise<AgentSource[]> {
+async function directoryAgents(path: string, kind: AgentSource["kind"]): Promise<{ sources: AgentSource[]; skipped: Array<{ path: string; reason: string }> }> {
   let files: string[];
-  try { files = await readdir(path); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
-  return Promise.all(files.filter(file => file.endsWith(".md")).sort().map(file => parseSource(join(path, file), kind)));
+  try { files = await readdir(path); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { sources: [], skipped: [] }; throw error; }
+  const sources: AgentSource[] = [], skipped: Array<{ path: string; reason: string }> = [];
+  // One unreadable file must not veto the whole directory: OMP also skips it and only the seat that needs it fails, naming the file.
+  for (const file of files.filter(file => file.endsWith(".md")).sort()) {
+    const full = join(path, file);
+    try { sources.push(await parseSource(full, kind)); }
+    catch (error) { skipped.push({ path: full, reason: error instanceof Error ? error.message : String(error) }); }
+  }
+  return { sources, skipped };
 }
 export async function resolveSeats(ctx: ExtensionContext, settings: Settings, requests: SeatRequest[], runId: string, generation = 0, fallbackSeats: Array<{ seatId: string; fallbackSeatIds: string[] }> = []): Promise<SeatResolution> {
   const disabled = settings.get("task.disabledAgents");
   for (const request of requests) if (disabled.includes(request.agentName)) throw new Error(`Required seat ${request.seatId}: agent ${request.agentName} is disabled by task.disabledAgents.`);
   const root = await mkdtemp(join(tmpdir(), "supership-seats-"));
-  const sources: AgentSource[] = [];
+  const sources: AgentSource[] = [], skipped: Array<{ path: string; reason: string }> = [];
   for (let directory = resolve(ctx.cwd); ; directory = dirname(directory)) {
     const found = await directoryAgents(join(directory, ".omp", "agents"), "project");
-    if (found.length) { sources.push(...found); break; }
+    skipped.push(...found.skipped);
+    if (found.sources.length) { sources.push(...found.sources); break; }
     if (dirname(directory) === directory) break;
   }
-  sources.push(...await directoryAgents(join(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".omp", "agent"), "agents"), "user"));
+  { const scanned = await directoryAgents(join(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".omp", "agent"), "agents"), "user"); skipped.push(...scanned.skipped); sources.push(...scanned.sources); }
   for (const extension of [...settings.get("extensions"), resolve(import.meta.dir, "..")]) {
     const path = extension.startsWith("~/") ? join(homedir(), extension.slice(2)) : resolve(ctx.cwd, extension);
-    if ((await stat(path).catch(() => undefined))?.isDirectory()) sources.push(...await directoryAgents(join(path, "agents"), "extension"));
+    if ((await stat(path).catch(() => undefined))?.isDirectory()) { const scanned = await directoryAgents(join(path, "agents"), "extension"); skipped.push(...scanned.skipped); sources.push(...scanned.sources); }
   }
   let unpacked = false;
   const bindings: SeatBinding[] = [];
@@ -83,10 +93,14 @@ export async function resolveSeats(ctx: ExtensionContext, settings: Settings, re
   for (const request of requests) {
     let source = request.sourcePath ? await parseSource(resolve(ctx.cwd, request.sourcePath), "explicit") : sources.find(source => source.metadata.name === request.agentName);
     if (!source) {
-      if (!unpacked) { await exec("omp", ["agents", "unpack", "--dir", join(root, "bundled"), "--json"], { cwd: ctx.cwd, timeout: 30000 }); sources.push(...await directoryAgents(join(root, "bundled"), "bundled")); unpacked = true; }
+      if (!unpacked) { await exec("omp", ["agents", "unpack", "--dir", join(root, "bundled"), "--json"], { cwd: ctx.cwd, timeout: 30000 }); const scanned = await directoryAgents(join(root, "bundled"), "bundled"); skipped.push(...scanned.skipped); sources.push(...scanned.sources); unpacked = true; }
       source = sources.find(source => source.metadata.name === request.agentName);
     }
-    if (!source || source.metadata.name !== request.agentName) throw new Error(`Required seat ${request.seatId}: agent ${request.agentName} was not found in project, user, or configured extension definitions, or bundled export. Set sourcePath for an explicitly registered extension root.`);
+    if (!source || source.metadata.name !== request.agentName) {
+      const culprit = skipped.find(item => basename(item.path, ".md") === request.agentName);
+      if (culprit) throw new Error(`Required seat ${request.seatId}: ${culprit.reason[0]!.toLowerCase()}${culprit.reason.slice(1)}`);
+      throw new Error(`Required seat ${request.seatId}: agent ${request.agentName} was not found in project, user, or configured extension definitions, or bundled export. Set sourcePath for an explicitly registered extension root.`);
+    }
     const requested = request.model ?? settings.get("task.agentModelOverrides")[request.agentName] ?? source.metadata.model;
     const patterns = Array.isArray(requested) ? requested : requested ? [requested] : [];
     const selected = patterns.map(pattern => ({ pattern: String(pattern), model: ctx.models.resolve(String(pattern)) })).find(item => item.model);
@@ -184,7 +198,7 @@ export function renderControlCell(action: ActionRecord, state: RunRecord, source
     case "wait": {
       const pools = [...new Set(action.input.owners.filter(owner => owner.kind === "pool" || owner.kind === "pool-item").map(owner => owner.parentId ?? owner.id))];
       const finite = action.input.owners.filter(owner => owner.kind !== "pool" && owner.kind !== "pool-item");
-      body = `const result=await tool.hub({op:"wait",ids:${canonicalJson([...finite.map(owner=>owner.id),...pools])},timeoutMs:1000}); ` + (finite.length ? report("native-results", "result")+`; for(const job of result.details?.jobs??[]) {if(job.status!=="completed" || job.structured || job.structuredOutput) continue; const agentId=job.agentId??job.id,path="agent://"+agentId+"?q=.",source=await tool.read({path}); ${report("native-replay", "{ownerId:job.id,agentId,path,source}")};}` : "") + pools.map(poolId => `{const pool=${registry}.pools[${JSON.stringify(poolId)}]; if(!pool) throw new Error("Supership kernel lost"); ${report("pool-results", `{poolId:${JSON.stringify(poolId)},status:await pool.status(),peek:await pool.peek()}`)};}`).join("\n") + report("wait-complete", "{}");
+      body = `const result=await tool.hub({op:"wait",ids:${canonicalJson([...finite.map(owner=>owner.id),...pools])},timeoutMs:1000}); ` + (finite.length ? report("native-results", "result")+`; for(const job of result.details?.jobs??[]) {if(job.status!=="completed" || job.structured || job.structuredOutput) continue; const agentId=job.agentId??job.id,path="agent://"+agentId+"?q=.",source=await tool.read({path}); const replayed=${report("native-replay", "{ownerId:job.id,agentId,path,source}")}; if(replayed.details?.notReady) continue;}` : "") + pools.map(poolId => `{const pool=${registry}.pools[${JSON.stringify(poolId)}]; if(!pool) throw new Error("Supership kernel lost"); ${report("pool-results", `{poolId:${JSON.stringify(poolId)},status:await pool.status(),peek:await pool.peek()}`)};}`).join("\n") + report("wait-complete", "{}");
       break;
     }
     case "cancel_runtime": body = `${report("cancel-requested", "{}")}; const result=await tool.hub({op:"cancel",ids:${canonicalJson(action.input.owners.map(owner => owner.id))}}); ${report("cancel-observed", "result")};`; break;
@@ -295,6 +309,15 @@ export async function captureWorkerOutput(candidate:unknown,capture:(proposal:To
   if (raw.kind === "build" && raw.proposedAmendment) output = { ...raw, ...common, proposedAmendment: { ...raw.proposedAmendment, proposedPlan: { ...raw.proposedAmendment.proposedPlan, toolProposals: await Promise.all(raw.proposedAmendment.proposedPlan.toolProposals.map(capture)) } } };
   assertSchema(WorkerOutputSchema, output, "captured worker output");
   return output;
+}
+export interface ReplayProbe { hash: string; count: number }
+const REPLAY_STABLE_LIMIT = 3;
+// A result that is still streaming parses differently every round; only identical bytes past the limit prove malformation.
+export function probeReplayArtifact(prior: ReplayProbe | undefined, text: string): { kind: "ready"; output: unknown } | { kind: "waiting"; probe: ReplayProbe } | { kind: "malformed" } {
+  try { return { kind: "ready", output: JSON.parse(text) }; } catch { /* Torn or malformed; stability decides. */ }
+  const hash = sha256Utf8(text), count = prior && prior.hash === hash ? prior.count + 1 : 1;
+  if (count > REPLAY_STABLE_LIMIT) return { kind: "malformed" };
+  return { kind: "waiting", probe: { hash, count } };
 }
 export async function normalizeNativeResult(action: ActionRecord, result: unknown, state: RunRecord, observation: ReceiptObservation, capture: (proposal: ToolProposal) => Promise<CapturedToolProposal>, recovered?: ReadonlyMap<string,unknown>): Promise<EngineInput[]> {
   const value = result as { details?: { results?: Array<Record<string, unknown>>; jobs?: Array<Record<string, unknown>>; progress?: Array<Record<string, unknown>> } };

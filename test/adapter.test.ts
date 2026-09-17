@@ -4,9 +4,9 @@ import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFi
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { doctor, readRuntimeSnapshot, CapabilityReportSchema } from "../src/omp.ts";
+import { doctor, probeReplayArtifact, readRuntimeSnapshot, resolveSeats, CapabilityReportSchema } from "../src/omp.ts";
 import { assertSchema, type RunRecord, type RuntimeOwner, type SchedulingSnapshot } from "../src/contracts.ts";
-import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { Settings, type ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { shareNativeCache } from "./support/native-cache.ts";
 
 test("runtime snapshot reports the WorkPool owner from its aggregate job, never inferring an unpushed pool ended", () => {
@@ -32,6 +32,37 @@ test("doctor distinguishes version and runtime capabilities without model transp
   for (const observedVersion of ["18.1.10", "18.2.2", "18.2.3"]) { const supported = await doctor({ observedVersion, runtime }); assertSchema(CapabilityReportSchema, supported); assert.equal(supported.supported, true); }
   for (const observedVersion of ["18.1.9", "18.3.0", "19.0.0", "18.1.10-private", "unknown"]) assert.equal((await doctor({ observedVersion })).supported, false);
   assert.equal((await doctor({ observedVersion: "18.1.10", runtime: { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: true, session: true } })).supported, false);
+});
+
+test("seat resolution skips unreadable agent files but names the culprit when the seat needs it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "supership-seats-")), repo = join(root, "repo"), agents = join(repo, ".omp", "agents"), userDir = join(root, "user");
+  mkdirSync(agents, { recursive: true }); mkdirSync(join(userDir, "agents"), { recursive: true });
+  writeFileSync(join(agents, "good.md"), "---\nname: good\ndescription: Valid seat agent\n---\nBody\n");
+  writeFileSync(join(agents, "broken.md"), "---\nname: broken\ndescription: Bad colon: unquoted\n---\nBody\n");
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR; process.env.PI_CODING_AGENT_DIR = userDir;
+  try {
+    const settings = Settings.isolated({ "task.disabledAgents": [], "extensions": [], "task.agentModelOverrides": {}, "task.agentPrewalk": {}, "task.agentAdvisor": {} });
+    const model = { provider: "probe", id: "probe" };
+    const ctx = { cwd: repo, models: { resolve: () => model, current: () => model, list: () => [model] } } as unknown as ExtensionContext;
+    const resolved = await resolveSeats(ctx, settings, [{ seatId: "scout", agentName: "good" }], "seats-test");
+    assert.equal(resolved.bindings[0]!.source.path, join(agents, "good.md"));
+    await assert.rejects(resolveSeats(ctx, settings, [{ seatId: "scout", agentName: "broken" }], "seats-test"), /broken\.md.*invalid YAML frontmatter/);
+  } finally { if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDir; }
+});
+
+test("replay readiness distinguishes streaming artifacts from malformed ones", () => {
+  assert.deepEqual(probeReplayArtifact(undefined, '{"a":1}'), { kind: "ready", output: { a: 1 } });
+  const first = probeReplayArtifact(undefined, '{"a":');
+  assert.equal(first.kind, "waiting");
+  const second = probeReplayArtifact(first.kind === "waiting" ? first.probe : undefined, '{"a":1');
+  assert.equal(second.kind, "waiting", "Changed bytes restart the stability count");
+  let probe = second.kind === "waiting" ? second.probe : undefined;
+  for (let round = 0; round < 3; round++) {
+    const next = probeReplayArtifact(probe, "nope");
+    assert.equal(next.kind, "waiting");
+    probe = next.kind === "waiting" ? next.probe : undefined;
+  }
+  assert.equal(probeReplayArtifact(probe, "nope").kind, "malformed", "Identical bytes past the limit prove malformation");
 });
 
 test("real product extension gates startup and native eval through isolated offline OMP sessions", () => {
