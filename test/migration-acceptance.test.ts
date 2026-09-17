@@ -14,7 +14,7 @@ afterAll(() => {
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify({
     kind: "scripted-software-integration", modelJudgmentProven: false,
-    runtime: "Installed OMP 18.1.10 loads the migrated package only through its public plugin registry; the scripted provider is the sole configured extension",
+    runtime: "Installed OMP loads the migrated package only through its public plugin registry; the scripted provider is the sole configured extension",
     realInstallationsChanged: false, layouts: evidence,
   }, null, 2));
 });
@@ -28,7 +28,7 @@ function registration(result: Evidence) {
     assert.equal(owners.length, 1, `/${command} must have exactly one owner after migration: ${JSON.stringify(owners)}`);
     assert.equal(owners[0]!.source, "extension", `/${command} is still owned by a prompt file: ${JSON.stringify(owners[0])}`);
   }
-  // OMP 18.1.10 enumerates TypeScript, bundled and skill commands here; Markdown under commands/ is inert, so removed legacy files are proven on disk by the fixture and ownership by this single extension entry.
+  // OMP enumerates TypeScript, bundled and skill commands here; Markdown under commands/ is inert, so removed legacy files are proven on disk by the fixture and ownership by this single extension entry.
   assert.ok(event.tools?.includes("supership_next"), "The registered engine must expose its parent controls");
   return event;
 }

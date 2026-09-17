@@ -41,7 +41,7 @@ Granted callbacks, functions that another task invokes, operate in the parent ke
 
 ## Discovery and preserved legacy sources
 
-OMP 18.1.10 scans `<package-root>/agents/*.md`. The `omp` package manifest has an `extensions` field but no agent-path field. A manifest declares package resources. Root `agents/` therefore contains the only authored roster. No wildcard points at `omp/agents`.
+OMP scans `<package-root>/agents/*.md`. The `omp` package manifest has an `extensions` field but no agent-path field. A manifest declares package resources. Root `agents/` therefore contains the only authored roster. No wildcard points at `omp/agents`.
 
 The old `omp/agents`, `omp/commands`, `omp/templates`, and `omp/APPEND_SYSTEM.md` remain preserved source until approved migration. The package does not register them.
 

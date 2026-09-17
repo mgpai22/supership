@@ -73,6 +73,8 @@ assert.ok(completed, JSON.stringify(events));
 assert.match(completed.content[0].text, /"nativeWriteDenied": true/);
 assert.match(completed.content[0].text, /"crossWorkDenied": true/);
 assert.ok(events.some(event => event.kind === "tool" && event.name === "eval" && JSON.stringify(event.content).includes("unbound-denied")));
+// OMP 18.2 parks kept-alive isolated runs with their worktree until release; dispose first, then assert native cleanup.
+await result.session.dispose(); await authStorage.close();
 assert.ok(childSessions.every(event => !existsSync(event.cwd)));
 assert.ok(events.filter(event => event.kind === "route").every(event => event.work === a.work.id));
 assert.ok(events.some(event => event.kind === "route" && event.operation === "bash" && event.input.cwd === a.path));
@@ -80,5 +82,4 @@ revokeWorkspace(a); revokeWorkspace(a);
 const capture = await captureWorkspace(a);
 assert.deepEqual(capture.patch.changes.map(change => change.path), ["command.txt", "new.txt", "tracked.txt"]);
 writeFileSync(join(root, "evidence.json"), JSON.stringify({ status: job.status, nativeScratchGone: true, nativeWriteDenied: true, crossWorkDenied: true, path: a.path, patch: capture.patch, binding: a }, null, 2));
-await result.session.dispose(); await authStorage.close();
 console.log(JSON.stringify({ result: "passed", evidence: join(root, "evidence.json") }));

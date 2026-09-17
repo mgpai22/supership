@@ -628,7 +628,7 @@ export function decide(state: RunRecord | undefined, input: EngineInput, context
     const start = input.start;
     if (start.owner.sessionId !== context.ownerSessionId || start.owner.epoch !== context.ownerEpoch || start.owner.epoch !== 0) return reject("owner-mismatch", "Start owner does not match epoch zero context");
     if (!start.preflight.checks.every(check => check.passed) || !same(start.repository, start.preflight.repository) || !same(start.seats, start.preflight.seats)) return reject("preflight-failed", "All preflight observations must pass and match the start record");
-    if (!/^18\.1\.(?:1[0-9]|[2-9][0-9]|[1-9][0-9]{2,})$/.test(start.preflight.observedVersion)) return reject("unsupported-version", "OMP must be >=18.1.10 <18.2.0");
+    if (!/^18\.(?:1\.(?:1[0-9]|[2-9][0-9]|[1-9][0-9]{2,})|2\.\d+)$/.test(start.preflight.observedVersion)) return reject("unsupported-version", "OMP must be >=18.1.10 <18.3.0");
     const expectedMode = start.invocation.command === "superreview" ? "review-only" : ["shipit", "ultrashipit"].includes(start.invocation.command) ? "autonomous" : "interactive";
     if (start.invocation.mode !== expectedMode || (["ultraship", "ultrashipit", "superreview"].includes(start.invocation.command) && start.invocation.topology === "normal")) return reject("invalid-invocation", "Command mode/topology does not match its public meaning");
     if (new Set(start.seats.map(seat => seat.seatId)).size !== start.seats.length) return reject("duplicate-seat", "Seat IDs must be unique");

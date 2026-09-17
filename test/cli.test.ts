@@ -266,7 +266,7 @@ try {
         const doctor = execute(["doctor", "--cwd", packageRoot]);
         assert.ok(doctor.status === 0 || doctor.status === 1, doctor.stderr);
         const report = JSON.parse(doctor.stdout);
-        assert.equal(report.expectedRange, ">=18.1.10 <18.2.0");
+        assert.equal(report.expectedRange, ">=18.1.10 <18.3.0");
         assert.equal(report.checks.find((check: { name: string }) => check.name === "version")?.available, true, JSON.stringify(report));
         assert.ok(report.checks.length > 0);
         assert.equal(doctor.status, report.supported ? 0 : 1);

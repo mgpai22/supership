@@ -65,7 +65,7 @@ test("native non-CodeMode authority rejects prepared-message tool IDs and serial
   const report = { root, source, fixtureRoot, sourceHashes, version, attacks: attacks.map(event => event.action!.input.kind), directIds: direct.map(call => call.id) };
   writeFileSync(join(root, "authority-evidence.json"), JSON.stringify(report, null, 2));
 
-  assert.equal(version, "18.1.10");
+  assert.equal(version, "18.2.2");
   const parentTools = events.find(event => event.event === "provider" && event.model === "authority-parent")!.tools!;
   for (const name of ["eval", "task", "hub", "bash", "write"]) assert.ok(parentTools.includes(name), `${name} must be directly exposed outside CodeMode`);
   // Outside Code Mode the host mounts extension tools as xd:// devices: the model reaches supership_next through write, never through a listed tool.
