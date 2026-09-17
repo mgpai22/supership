@@ -20,7 +20,7 @@ import { activateChildGuard, deactivateChildGuard, observeChildGuard, validateWo
 import { guardExtension, prepareWorkspace, routeWorkspaceOperation, captureWorkspace, revokeWorkspace, type WorkspaceBinding, type WorkspaceOperation } from "./workspace.ts";
 import { observeChildUsage, prepareUsageMeter, readUsageObservations, releaseUsageMeter } from "./usage.ts";
 import { renderDashboard } from "./dashboard.ts";
-import { captureWorkerOutput, nativeName, normalizeNativeResult, probeCapabilities, readRuntimeSnapshot, receiptBase, reconcileRuntime, releaseSeatBindings, removeExtensionRoots, renderControlCell, resolveSeats, runtimeToolName, taskParameters, validateControlCall, type ControlCell, type SeatResolution } from "./omp.ts";
+import { captureWorkerOutput, nativeName, normalizeNativeResult, probeCapabilities, probeReplayArtifact, readRuntimeSnapshot, receiptBase, reconcileRuntime, releaseSeatBindings, removeExtensionRoots, renderControlCell, resolveSeats, runtimeToolName, taskParameters, validateControlCall, type ControlCell, type SeatResolution } from "./omp.ts";
 import { captureProposal, inspectProposal, readCapturedSource, validateGrant, PARENT_ACCESS, TOOL_POLICY_LIMIT } from "./tools.ts";
 import { NextRequestSchema, nextExpression, issueControl, controlManifest, controlPage, controlResult, type IssuedControl } from "./control-delivery.ts";
 
@@ -107,7 +107,7 @@ export function requestedSeats(invocation: Invocation, policy: PolicyOverlay): S
   return names.map(seatId => { const request = policy.seats.find(seat => seat.seatId === seatId) ?? { seatId, agentName: baseAgents[seatId] ?? seatId }; return { ...request, ...(invocation.seats[seatId] ? { model: invocation.seats[seatId] } : {}) }; });
 }
 
-interface ActiveRun { state: RunRecord; writer: RunWriter; settings: Settings; seats: SeatResolution; ownership: OwnershipRecord; cells: Map<string, IssuedControl>; native: Map<string, unknown>; workspaces: Map<string,WorkspaceBinding>; capturedWorkspaces:Set<string>; scopeRevision:number; childRoots: string[]; restoreSettings: () => void; kernelToken: string; evalAction?: string; evalCallId?: string; evalExecuting?: string; allowedTurn: boolean }
+interface ActiveRun { state: RunRecord; writer: RunWriter; settings: Settings; seats: SeatResolution; ownership: OwnershipRecord; cells: Map<string, IssuedControl>; native: Map<string, unknown>; replayProbes: Map<string, { hash: string; count: number }>; workspaces: Map<string,WorkspaceBinding>; capturedWorkspaces:Set<string>; scopeRevision:number; childRoots: string[]; restoreSettings: () => void; kernelToken: string; evalAction?: string; evalCallId?: string; evalExecuting?: string; allowedTurn: boolean }
 interface PendingStart { invocation: Invocation; settings: Settings; nonce: string }
 // Session-local runtime overrides for one run: verification commands must settle in the cell, native isolation must exist for
 // worktree assignments, and native scratch must never auto-apply into the parent checkout. Restored exactly when the run releases.
@@ -281,7 +281,7 @@ export default function registerSupership(api: ExtensionAPI): void {
       let writer: RunWriter;
       try { writer = await openWriter(path, { sessionId, expectedEpoch: loaded.state.owner.epoch, purpose: "resume" }); } catch (error) { releaseSeatBindings(settings, seats); throw error; }
       const ownership = JSON.parse(await readFile(join(path, "ownership.json"), "utf8")) as OwnershipRecord;
-      active = { state: loaded.state, writer, settings, seats, ownership, cells: new Map(), native: new Map(), workspaces:new Map(), capturedWorkspaces:new Set(), scopeRevision:-1, childRoots: [], restoreSettings: scopeSettings(settings), kernelToken: randomUUID(), allowedTurn: true };
+      active = { state: loaded.state, writer, settings, seats, ownership, cells: new Map(), native: new Map(), replayProbes: new Map(), workspaces:new Map(), capturedWorkspaces:new Set(), scopeRevision:-1, childRoots: [], restoreSettings: scopeSettings(settings), kernelToken: randomUUID(), allowedTurn: true };
       await persist({ kind: "resume", sessionId, leaseId: writer.leaseId, reconciliation: reconcileRuntime(loaded.state, readRuntimeSnapshot(ctx, loaded.state, syncConcurrencyCap(settings, loaded.state.limits.concurrency))) });
       await auditVerificationEvidence();
       await restoreWorkspaces();
@@ -316,7 +316,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     const preflight = { schemaVersion: 1 as const, observedVersion: capability.observedVersion, checks: capability.checks.map(check => ({ name: check.name, passed: check.available, expected: check.expected, observed: check.observed, evidence: [] })), repository, planMode: false as const, ownerAvailable: true as const, ignoreVerified: true as const, seats: seats.bindings };
     const created = await createRun(writer, { kind: "start", start: { schemaVersion: 1, runId: randomUUID(), slug: invocation.slug, owner: { sessionId, epoch: 0, leaseId: writer.leaseId }, repository, invocation: invocation.invocation, seats: seats.bindings, limits, policy, preflight, clarificationCompleted: invocation.invocation.mode === "interactive" } }, preflight);
     if (created.kind === "rejected") { releaseSeatBindings(settings, seats); await closeWriter(writer); throw new Error(created.message); }
-    active = { state: created.state, writer, settings, seats, ownership: { baseline, patches: [] }, cells: new Map(), native: new Map(), workspaces:new Map(), capturedWorkspaces:new Set(), scopeRevision:0, childRoots: [], restoreSettings: scopeSettings(settings), kernelToken: randomUUID(), allowedTurn: true };
+    active = { state: created.state, writer, settings, seats, ownership: { baseline, patches: [] }, cells: new Map(), native: new Map(), replayProbes: new Map(), workspaces:new Map(), capturedWorkspaces:new Set(), scopeRevision:0, childRoots: [], restoreSettings: scopeSettings(settings), kernelToken: randomUUID(), allowedTurn: true };
     await writeFile(join(path, "ownership.json"), canonicalJson(active.ownership), { flag: "wx", mode: 0o600 });
     await bindChildren();
     await persist({ kind: "record-git-observation", observation: await observedCode([]) });
@@ -703,7 +703,11 @@ export default function registerSupership(api: ExtensionAPI): void {
       if(!native || digestJson(native.details??{})!==digestJson(JSON.parse(JSON.stringify(reported.details??{})))) throw new Error("Result replay lacks an observed native read.");
       const original=run.state.actions.find(action=>action.id===owner.actionId)!;
       const text=native.content?.filter(block=>block.type==="text").map(block=>block.text??"").join("\n")??"";
-      let output:unknown; try {output=JSON.parse(text);} catch {throw new Error("Native structured result artifact is unreadable JSON.");}
+      const probe=probeReplayArtifact(run.replayProbes.get(owner.id),text);
+      if(probe.kind==="malformed"){run.replayProbes.delete(owner.id);throw new Error("Native structured result artifact is unreadable JSON.");}
+      if(probe.kind==="waiting"){run.replayProbes.set(owner.id,probe.probe);return result({accepted:false,notReady:true,ownerId:owner.id,attempt:probe.probe.count});}
+      run.replayProbes.delete(owner.id);
+      const output=probe.output;
       const rows={details:{results:[{id:owner.id,status:"completed"}]}};
       for(const input of await normalizeNativeResult(original,rows,run.state,{...observation,verifiedProgramHash:original.programHash},proposal=>captureProposal(proposal,{runPath:run.writer.runPath,existingNames:api.getAllTools().map(tool=>tool.name)}),new Map([[owner.id,output]]))) await persist(input,input.kind==="observe-receipt"?input.receipt.receiptId:randomUUID());
       return result({accepted:true});

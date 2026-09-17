@@ -53,7 +53,9 @@ async function safeRunPath(path: string, create: boolean): Promise<string> {
   else if (!create) throw new StoreError("missing-run", "No versioned run exists", resolved);
   if (create) {
     if (resolve(await git(root, ["rev-parse", "--show-toplevel"])) !== root) throw new StoreError("invalid-repository", "Run must live in the Git worktree root", root);
-    await git(root, ["check-ignore", "--quiet", "--no-index", "--", `.planning/${basename(resolved)}/state.json`]);
+    // check-ignore exits 1 with no output when the path is not ignored; anything else is a real git failure.
+    try { await git(root, ["check-ignore", "--quiet", "--no-index", "--", `.planning/${basename(resolved)}/state.json`]); }
+    catch (error) { if (error instanceof StoreError && error.message === `Git exited 1: ${root}`) throw new StoreError("planning-not-ignored", "Run state must stay git-ignored; add .planning/ to .gitignore", root); throw error; }
   }
   return resolved;
 }

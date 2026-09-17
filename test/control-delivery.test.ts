@@ -137,6 +137,27 @@ test("ordered pages bound the entire escaped bridge envelope and preserve every 
   assert.throws(() => controlResult(expanded), /display budget/);
 });
 
+test("page boundaries never tear escapes, identifiers, or surrogate pairs", () => {
+  const code = "const re = /[\\u0000-\\u001F\\d]+/; const s = \"a\\\"b\\\\c\\nd\\u00e9\"; const e = 'x😀y';\n".repeat(400);
+  const cell: ControlCell = { language: "js", timeout: 0, code, inputHash: "a".repeat(64), programHash: hash(code), actionId: "a-1", runId: "fixture", ownerEpoch: 0, expectedStateRevision: 1, recipients: [] };
+  const issued = issueControl(cell);
+  assert.ok(issued.pages.length > 1);
+  assert.equal(issued.pages.join(""), code);
+  let offset = 0;
+  for (const page of issued.pages.slice(0, -1)) {
+    offset += page.length;
+    const unit = code.charCodeAt(offset - 1);
+    const ascii = String.fromCharCode(unit);
+    assert.ok(!/[0-9A-Za-z\\{}$_]/.test(ascii) && !(unit >= 0xd800 && unit <= 0xdbff), `boundary tore a token at ${offset}: ...${code.slice(offset - 12, offset + 12)}...`);
+  }
+  // A dense escape blob with no safe units keeps every unit whole.
+  const dense = "\\u0041".repeat(3000);
+  const densePages = issueControl({ ...cell, code: dense, programHash: hash(dense) }).pages;
+  assert.ok(densePages.length > 1);
+  assert.equal(densePages.join(""), dense);
+  for (const page of densePages) assert.equal(page.length % 6, 0);
+});
+
 test("the visible-message consumer refreshes only exact read or preclaim denials", () => {
   const code = "const granted = 1;";
   const cell: ControlCell = { language: "js", timeout: 0, code, inputHash: "a".repeat(64), programHash: hash(code), actionId: "a-1", runId: "fixture", ownerEpoch: 0, expectedStateRevision: 1, recipients: [] };

@@ -53,6 +53,15 @@ test("real flock excludes another process; graceful release preserves the lock i
   expect(resumed.kind === "committed" && resumed.state.owner.epoch).toBe(1);
 });
 
+test("run creation names the missing planning ignore instead of a bare git failure", async () => {
+  const root = await mkdtemp(join(tmpdir(), "supership-store-")); roots.push(root);
+  const init = Bun.spawn(["git", "init", "--quiet", root], { stdout: "pipe", stderr: "pipe" });
+  expect(await init.exited).toBe(0);
+  const path = join(root, ".planning", "no-ignore");
+  await expect(openWriter(path, { sessionId: "session", purpose: "start" })).rejects.toMatchObject({ code: "planning-not-ignored" });
+  await expect(openWriter(path, { sessionId: "session", purpose: "start" })).rejects.toThrow(/\.planning\/ to \.gitignore/);
+});
+
 test("parent SIGKILL releases flock without deleting its persistent file", async () => {
   const root = await repository();
   const child = Bun.spawn([process.execPath, fixture, "hold", root, "crash-owner"], { stdin: "ignore", stdout: "pipe", stderr: "pipe" }); children.push(child);
@@ -153,7 +162,7 @@ test("legacy dashboards, reserved handoff slugs, symlink paths and nonignored re
   await expect(readRun(join(root, ".planning", "linked"))).rejects.toMatchObject({ code: "symlink-path" });
   expect(await readFile(join(legacy, "plan.html"), "utf8")).toBe("legacy user dashboard");
   await writeFile(join(root, ".gitignore"), "");
-  await expect(openWriter(join(root, ".planning", "not-ignored"), { sessionId: "session", purpose: "start" })).rejects.toMatchObject({ code: "git-preflight" });
+  await expect(openWriter(join(root, ".planning", "not-ignored"), { sessionId: "session", purpose: "start" })).rejects.toMatchObject({ code: "planning-not-ignored" });
   expect(await readdir(join(root, ".planning"))).not.toContain("not-ignored");
 });
 
