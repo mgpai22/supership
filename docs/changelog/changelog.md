@@ -10,6 +10,11 @@ This page lists merged pull requests, newest first, from repository history. A p
 
 ## Unreleased
 
+### OMP 18.2 support
+
+Supership accepts OMP `>=18.1.10 <18.3.0` with SDK 18.2.2 fixtures. Fixtures supply controlled test inputs. OMP 18.2 converts tool schemas from a clone, so the `CloneType` workaround now guards 18.1 hosts only. Tests no longer assume same-message tool calls run in order, and native isolation cleanup is asserted after session release, matching the 18.2 kept-alive lifecycle. Approval, grant, and exact-code checks remain unchanged.
+
+
 ### Dynamic tools on OMP 18.1.17
 
 Supership uses `CloneType` at all five `api.registerTool` sites so OMP wire conversion cannot change its internal TypeBox validation schemas. Offline tests cover dynamic tool proposals, callback recovery, and tool recreation after kernel loss. Approval and grant checks remain unchanged.

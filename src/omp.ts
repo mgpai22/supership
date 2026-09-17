@@ -17,7 +17,7 @@ import type { WorkspaceBinding } from "./workspace.ts";
 import { PARENT_ACCESS, TOOL_POLICY_LIMIT } from "./tools.ts";
 
 const exec = promisify(execFile);
-export const EXPECTED_OMP_RANGE = ">=18.1.10 <18.2.0";
+export const EXPECTED_OMP_RANGE = ">=18.1.10 <18.3.0";
 export const CapabilityReportSchema = Type.Object({ supported: Type.Boolean(), observedVersion: Type.String(), expectedRange: Type.String(), checks: Type.Array(Type.Object({ name: Type.String(), available: Type.Boolean(), expected: Type.String(), observed: Type.String(), evidence: Type.Array(Type.String()) }, { additionalProperties: false })), limitations: Type.Array(Type.String()) }, { additionalProperties: false });
 export type CapabilityReport = Static<typeof CapabilityReportSchema>;
 export interface DoctorOptions { cwd?: string; observedVersion?: string; runtime?: { settings: boolean; extensionAgents: boolean; toolHooks: boolean; eval: boolean; task: boolean; planMode: boolean; session: boolean } }
@@ -33,7 +33,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<CapabilityRep
     }
   }
   const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(observedVersion);
-  checks.push({ name: "version", available: !!parts && +parts[1]! === 18 && +parts[2]! === 1 && +parts[3]! >= 10, expected: EXPECTED_OMP_RANGE, observed: observedVersion, evidence: [versionEvidence] });
+  checks.push({ name: "version", available: !!parts && +parts[1]! === 18 && ((+parts[2]! === 1 && +parts[3]! >= 10) || +parts[2]! === 2), expected: EXPECTED_OMP_RANGE, observed: observedVersion, evidence: [versionEvidence] });
   checks.push({ name: "platform", available: process.platform === "linux", expected: "linux", observed: process.platform, evidence: ["process.platform"] });
   try { await exec("git", ["--version"], { cwd: options.cwd, timeout: 15000 }); checks.push({ name: "git", available: true, expected: "Git executable", observed: "available", evidence: ["git --version"] }); }
   catch { checks.push({ name: "git", available: false, expected: "Git executable", observed: "unavailable", evidence: [] }); }

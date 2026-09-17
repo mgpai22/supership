@@ -28,9 +28,9 @@ test("runtime snapshot reports the WorkPool owner from its aggregate job, never 
 });
 
 test("doctor distinguishes version and runtime capabilities without model transport", async () => {
-  const supported = await doctor({ observedVersion: "18.1.10", runtime: { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: false, session: true } });
-  assertSchema(CapabilityReportSchema, supported); assert.equal(supported.supported, true);
-  for (const observedVersion of ["18.1.9", "18.2.0", "19.0.0", "18.1.10-private", "unknown"]) assert.equal((await doctor({ observedVersion })).supported, false);
+  const runtime = { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: false, session: true };
+  for (const observedVersion of ["18.1.10", "18.2.2"]) { const supported = await doctor({ observedVersion, runtime }); assertSchema(CapabilityReportSchema, supported); assert.equal(supported.supported, true); }
+  for (const observedVersion of ["18.1.9", "18.3.0", "19.0.0", "18.1.10-private", "unknown"]) assert.equal((await doctor({ observedVersion })).supported, false);
   assert.equal((await doctor({ observedVersion: "18.1.10", runtime: { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: true, session: true } })).supported, false);
 });
 
@@ -40,7 +40,7 @@ test("real product extension gates startup and native eval through isolated offl
   mkdirSync(join(home, ".omp", "agent"), { recursive: true }); mkdirSync(cwd);
   writeFileSync(join(home, ".omp", "agent", "config.yml"), "extensions: []\n");
   writeFileSync(join(cwd, ".gitignore"), ".planning/\n");
-  const env = { PATH: `${process.env.HOME}/.local/bin:${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin`, HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local/share"), PI_CODING_AGENT_DIR: join(home, ".omp", "agent"), TMPDIR: root, LC_ALL: "C", TERM: "dumb", CI: "1", PI_NO_TITLE: "1", OTEL_SDK_DISABLED: "true", PRODUCT_ROOT: root, PRODUCT_CWD: cwd, PRODUCT_EXTENSION: resolve("src/extension.ts") };
+  const env = { PATH: `${dirname(process.env.SUPERSHIP_ACCEPTANCE_OMP ?? Bun.which("omp") ?? join(process.env.HOME!, ".local/bin", "omp"))}:${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin`, HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local/share"), PI_CODING_AGENT_DIR: join(home, ".omp", "agent"), TMPDIR: root, LC_ALL: "C", TERM: "dumb", CI: "1", PI_NO_TITLE: "1", OTEL_SDK_DISABLED: "true", PRODUCT_ROOT: root, PRODUCT_CWD: cwd, PRODUCT_EXTENSION: resolve("src/extension.ts") };
   const run = (args: string[]) => {
     const executed = spawnSync(args[0]!, args.slice(1), { cwd, env, encoding: "utf8", timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
     writeFileSync(join(root, "last-command.json"), JSON.stringify({ args, status: executed.status, stdout: executed.stdout, stderr: executed.stderr }));

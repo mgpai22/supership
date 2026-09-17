@@ -412,7 +412,7 @@ for (const missing of ["eval", "reviewer", "secondary-model"] as const) test(`na
 }, 180000);
 
 test("an incompatible reported OMP version fails the public doctor check before any run", async () => {
-  // The in-session preflight reads the executing host's own version, which a PATH shim cannot alter on the installed 18.1.10 host;
+  // The in-session preflight reads the executing host's own version, which a PATH shim cannot alter on the installed host;
   // this row proves the public `supership doctor` incompatibility path under the same offline launcher and claims no native host refusal.
   const root = mkdtempSync(join(tmpdir(), "supership-acceptance-unsupported-version-")), bin = join(root, "bin"), cwd = join(root, "repo"), home = join(root, "home"), launcher = join(root, "deny-network");
   mkdirSync(bin); mkdirSync(cwd); mkdirSync(home);

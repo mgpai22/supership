@@ -77,6 +77,7 @@ let turns = 0, sentConcurrentNext = false, sentTimeoutProbe = false;
 // resume: a plain continuation until a second verification record exists or the run stops being active.
 const phase = process.env.AUTHORITY_PHASE ?? "proof";
 const attacked = new Set<string>();
+const deviceProbed = new Set<string>();
 const seenResults = new Set<string>();
 export default function authorityProvider(api: ExtensionAPI) {
   api.on("session_start", (_event, ctx) => log({ event: "session-start", sessionId: ctx.sessionManager.getSessionId(), cwd: ctx.cwd }));
@@ -140,6 +141,12 @@ export default function authorityProvider(api: ExtensionAPI) {
             sentTimeoutProbe = true;
             content = [call("eval", { language: cell.language, code: cell.code }, "omitted-timeout")];
           } else if (["run_finite", "wait", "verify"].includes(kind) && !attacked.has(kind)) {
+            if (!deviceProbed.has(kind)) {
+              deviceProbed.add(kind);
+              // OMP 18.2 overlaps same-message tool execution, so a page read sharing a message with the claiming eval races. Prove the device page route on a lone turn first.
+              content = [call("write", { path: "xd://supership_next", content: JSON.stringify({ cellId: delivered!.cellId, page: 0 }) })];
+              log({ event: "device-probe", action, calls: content });
+            } else {
             attacked.add(kind);
             // Native OMP prepares the whole message before it executes any call. This receipt is
             // ordered before exclusive eval, so its execute would see eval's claimed action.
@@ -151,8 +158,9 @@ export default function authorityProvider(api: ExtensionAPI) {
             const scenario = action.input.kind === "verify" ? action.input.check.scenario : undefined;
             assert.ok(!scenario || scenario.kind === "command");
             const directBash = scenario?.kind === "command" ? { command: scenario.command.map(quote).join(" "), cwd: scenario.cwd, async: false } : { command: `printf unexpected >> ${quote(join(root, "unauthorized-effects.txt"))}`, cwd, async: false };
-            content = [call("write", { path: "xd://supership_next", content: JSON.stringify({ cellId: delivered!.cellId, page: 0 }) }), call("supership_runtime", forged), spoof("supership_runtime", forged), call("write", { path: "xd://supership_runtime", content: JSON.stringify(forged) }), exact, spoof("task", directTask), spoof("hub", directHub), spoof("bash", directBash)];
+            content = [call("supership_runtime", forged), spoof("supership_runtime", forged), call("write", { path: "xd://supership_runtime", content: JSON.stringify(forged) }), exact, spoof("task", directTask), spoof("hub", directHub), spoof("bash", directBash)];
             log({ event: "attack", action, calls: content });
+            }
           } else content = [exact];
         } else content = [turns % 2 ? call("supership_next", {}) : call("write", { path: "xd://supership_next", content: "{}" })];
       } else if (context.messages.some(message => message.role === "toolResult" && message.toolName === "yield")) {

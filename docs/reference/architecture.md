@@ -12,7 +12,7 @@ The Crust CLI, a command-line interface, reuses core operations for installation
 
 ## Supported boundary
 
-The target is Linux, Git, and OMP `>=18.1.10 <18.2.0`. Supership makes sure that OMP provides the required features. Source evidence uses OMP `5efa48385dde0a0c20cfadf62e2d5b95f84aafd1`. Observations from operation must separately identify the installed binary, the executable program.
+The target is Linux, Git, and OMP `>=18.1.10 <18.3.0`. Supership makes sure that OMP provides the required features. Source evidence uses OMP `5efa48385dde0a0c20cfadf62e2d5b95f84aafd1`. Observations from operation must separately identify the installed binary, the executable program.
 
 Native test homes share only their extracted binary cache, stored executable files for reuse. Configuration, providers, sessions, and evidence remain isolated. A provider supplies model responses. Evidence directories remain local after a run.
 
@@ -95,9 +95,11 @@ These source findings establish loading conventions. They do not prove that actu
 
 Supership uses scripted providers to make sure that requirements pass through real OMP sessions, tasks, eval, hooks, and native yield. The test harness isolates `HOME/config/auth`, disables ambient model features, and blocks external network access. No fictional mock/offline CLI flag substitutes for this boundary.
 
-The complete offline suite and typecheck passed locally with compiled OMP 18.1.17, Bun 1.3.14, and pinned SDK 18.1.10 fixtures.
+The complete offline suite and typecheck passed locally with compiled OMP 18.2.2, Bun 1.3.14, and pinned SDK 18.2.2 fixtures: 183 passed, zero failed.
 
-On a separate machine, the complete offline suite passed with official npm OMP 18.1.17 and Bun 1.4.2: 183 passed, zero failed, exit code zero. Its actual npm executable directory came first on PATH. The isolated HOME also exposed that executable through its local bin directory because the SDK test constructs PATH from HOME. Matching version strings alone do not establish equivalent package behavior.
+On a separate machine, the complete offline suite passed with official npm OMP 18.1.17 and Bun 1.4.2: 183 passed, zero failed, exit code zero. Its actual npm executable directory came first on PATH, selected through the acceptance binary variable. Matching version strings alone do not establish equivalent package behavior.
+
+The 18.2 run adapted two fixtures to 18.2 behavior without changing product gates beyond the widened range: same-message tool calls can overlap, so the authority proof reads device pages on a lone turn, and kept-alive isolated runs hold their worktree until release, so native cleanup is asserted after session disposal. Extension API comparison used the npm 18.1.10 and 18.2.2 SDK sources.
 
 These scripts prove only the software behavior they exercise, not model judgment quality. A live smoke check received real-provider responses but paused during research on token and cost caps before the requested change. The parent agent needed retries to reproduce the exact paged control code. This check does not prove a completed live workflow or live dynamic-tool recovery.
 

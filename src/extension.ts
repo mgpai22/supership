@@ -634,7 +634,7 @@ export default function registerSupership(api: ExtensionAPI): void {
     return controlResult({completedAction:action.id,lifecycle:run.state.lifecycle,...(run.state.recovery?{message:"A recovery decision is required. Resume through the OMP TUI."}:{}),next:run.state.recovery?"Do not repeat this action without its required decision.":"Call supership_next."});
   }
   let nextInFlight:ReturnType<typeof next>|undefined;
-  // OMP rewrites registered schemas for model transport; keep internal validation schemas unchanged.
+  // OMP 18.1 rewrites registered schemas in place for model transport; 18.2 clones first. Keep the clone while 18.1 hosts are supported.
   api.registerTool({name:"supership_next",label:"Supership next action",description:"Issue a bounded control manifest, or read one ordered page of its original code. Follow each exact next expression in a separate eval/display. At next:null, concatenate page code without separators and execute the original JavaScript with timeout:0. Bootstrap may ask trusted TUI decisions and also needs timeout:0. Pages are read-only and cannot approve or execute anything.",parameters:CloneType(NextRequestSchema),async execute(_id,args,_signal,_update,ctx){
     const { i: _intent, ...parameters } = args as Record<string, unknown>;
     const requestArgs: unknown = parameters;
