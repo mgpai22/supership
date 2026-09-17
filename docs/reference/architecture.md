@@ -95,7 +95,7 @@ These source findings establish loading conventions. They do not prove that actu
 
 Supership uses scripted providers to make sure that requirements pass through real OMP sessions, tasks, eval, hooks, and native yield. The test harness isolates `HOME/config/auth`, disables ambient model features, and blocks external network access. No fictional mock/offline CLI flag substitutes for this boundary.
 
-The complete offline suite and typecheck passed locally with compiled OMP 18.2.2, Bun 1.3.14, and pinned SDK 18.2.2 fixtures: 183 passed, zero failed.
+The complete offline suite and typecheck passed locally with compiled OMP 18.2.3, Bun 1.3.14, and pinned SDK 18.2.3 fixtures: 183 passed, zero failed.
 
 On a separate machine, the complete offline suite passed with official npm OMP 18.1.17 and Bun 1.4.2: 183 passed, zero failed, exit code zero. Its actual npm executable directory came first on PATH, selected through the acceptance binary variable. Matching version strings alone do not establish equivalent package behavior.
 

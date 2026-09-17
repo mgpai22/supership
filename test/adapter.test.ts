@@ -29,7 +29,7 @@ test("runtime snapshot reports the WorkPool owner from its aggregate job, never 
 
 test("doctor distinguishes version and runtime capabilities without model transport", async () => {
   const runtime = { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: false, session: true };
-  for (const observedVersion of ["18.1.10", "18.2.2"]) { const supported = await doctor({ observedVersion, runtime }); assertSchema(CapabilityReportSchema, supported); assert.equal(supported.supported, true); }
+  for (const observedVersion of ["18.1.10", "18.2.2", "18.2.3"]) { const supported = await doctor({ observedVersion, runtime }); assertSchema(CapabilityReportSchema, supported); assert.equal(supported.supported, true); }
   for (const observedVersion of ["18.1.9", "18.3.0", "19.0.0", "18.1.10-private", "unknown"]) assert.equal((await doctor({ observedVersion })).supported, false);
   assert.equal((await doctor({ observedVersion: "18.1.10", runtime: { settings: true, extensionAgents: true, toolHooks: true, eval: true, task: true, planMode: true, session: true } })).supported, false);
 });

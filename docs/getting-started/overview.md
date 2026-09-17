@@ -10,7 +10,7 @@ Supership adds a guided coding process to Oh My Pi (OMP).
 
 The extension stores workflow state, the recorded progress and decisions. The main OMP agent does task and JavaScript eval actions in its session. Eval means code evaluation within a persistent session.
 
-Baseline verification passed with compiled OMP 18.2.2 and official npm OMP 18.1.17. See [Architecture](/docs/reference/architecture#verification-limits) for evidence and limits.
+Baseline verification passed with compiled OMP 18.2.3 and official npm OMP 18.1.17. See [Architecture](/docs/reference/architecture#verification-limits) for evidence and limits.
 
 Offline scripts do not establish the quality of real-model judgments.
 
