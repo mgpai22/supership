@@ -403,7 +403,7 @@ def run_review_loop(S, plan, TASK, cfg_roles=None, diff_hint=None, frontend=Fals
         # oh-my-pi #3926 with the bundled `reviewer`). `reviewers` is a DIVERSITY
         # SET (entries alternate across lenses), NOT a fallback chain; empty = misconfig.
         review_models = list(cfg_roles.get("reviewers")
-                             or ["anthropic/claude-fable-5:high", "openai-codex/gpt-5.6-sol:xhigh",
+                             or ["anthropic/claude-fable-5:high", "openai-codex/gpt-6-sol:xhigh",
                                  "anthropic/claude-opus-5-5:xhigh"])
         # The `design` lens goes to the DESIGNER agent (@designer), not deep-reviewer;
         # it doesn't consume a reviewer-model slot (keeps the diversity alternation stable).
@@ -813,7 +813,7 @@ _cfg_roles = read_model_roles()  # one config read for the whole cell (pool + re
 # indistinguishable from absent and the default pool re-enables (benign, and
 # near-unreachable: the same omp process serving the read runs this cell).
 TASK_MODEL_POOL = list(_cfg_roles["taskpool"] if "taskpool" in _cfg_roles
-                       else ["openai-codex/gpt-5.6-sol:medium", "anthropic/claude-opus-5-5:medium",
+                       else ["openai-codex/gpt-6-sol:medium", "anthropic/claude-opus-5-5:medium",
                              "anthropic/claude-sonnet-5:high"])
 POOL_FULL = 0.95          # used_fraction at/above which a subscription is "full"
 POOL_SKIP = {}            # provider -> unix ts to skip until (reactive marks)

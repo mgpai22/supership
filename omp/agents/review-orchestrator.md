@@ -22,7 +22,7 @@ you orchestrate and JUDGE. That is where your (expensive) reasoning belongs.
 
 Loop:
 1. **Fan out reviewers in parallel** over the change, with DIVERSE models and
-   lenses: spawn `reviewer` (gpt-5.6-sol:high) and `deep-reviewer` (fable-5:high), and
+   lenses: spawn `reviewer` (gpt-6-sol:high) and `deep-reviewer` (fable-5:high), and
    give each a distinct focus stated in its task prompt (correctness, security,
    design, edge cases). Add more of either for a bigger surface.
    For a THREE-FAMILY panel on a high-stakes change, spawn the model-pinned
